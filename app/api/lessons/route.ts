@@ -1,0 +1,60 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { getSupabase } from '@/lib/supabase'
+
+// GET /api/lessons — list all lessons
+export async function GET() {
+  try {
+    const supabase = getSupabase()
+    const { data, error } = await supabase
+      .from('lessons')
+      .select('id, title, youtube_url, youtube_video_id, language, claude_md_content, created_at')
+      .order('created_at', { ascending: false })
+
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json({ lessons: data })
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Lỗi không xác định'
+    return NextResponse.json({ error: message }, { status: 500 })
+  }
+}
+
+// POST /api/lessons — save a lesson
+export async function POST(req: NextRequest) {
+  try {
+    const supabase = getSupabase()
+    const body = await req.json()
+    const { title, youtube_url, youtube_video_id, language, transcript, claude_md_content } = body
+
+    if (!title || !youtube_url || !claude_md_content) {
+      return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
+    }
+
+    const { data, error } = await supabase
+      .from('lessons')
+      .insert({ title, youtube_url, youtube_video_id, language, transcript, claude_md_content })
+      .select()
+      .single()
+
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json({ lesson: data })
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Lỗi không xác định'
+    return NextResponse.json({ error: message }, { status: 500 })
+  }
+}
+
+// DELETE /api/lessons?id=xxx
+export async function DELETE(req: NextRequest) {
+  try {
+    const supabase = getSupabase()
+    const id = req.nextUrl.searchParams.get('id')
+    if (!id) return NextResponse.json({ error: 'ID required' }, { status: 400 })
+
+    const { error } = await supabase.from('lessons').delete().eq('id', id)
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json({ success: true })
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Lỗi không xác định'
+    return NextResponse.json({ error: message }, { status: 500 })
+  }
+}
