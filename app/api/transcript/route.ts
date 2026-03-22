@@ -1,90 +1,34 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { extractVideoId } from '@/lib/utils'
 
-export const runtime = 'edge'
+async function fetchTranscriptSupadata(videoId: string): Promise<string> {
+  const apiKey = process.env.SUPADATA_API_KEY
+  if (!apiKey) throw new Error('SUPADATA_API_KEY not configured')
 
-const BROWSER_HEADERS = {
-  'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-  'Accept-Language': 'en-US,en;q=0.9,vi;q=0.8',
-  'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-  'Accept-Encoding': 'gzip, deflate, br',
-  'Connection': 'keep-alive',
-  'Upgrade-Insecure-Requests': '1',
-  'Sec-Fetch-Dest': 'document',
-  'Sec-Fetch-Mode': 'navigate',
-  'Sec-Fetch-Site': 'none',
-  'Sec-Fetch-User': '?1',
-  'Cache-Control': 'max-age=0',
-}
-
-interface CaptionTrack {
-  baseUrl: string
-  languageCode: string
-  kind: string
-}
-
-async function fetchTranscriptFromYouTube(videoId: string): Promise<string> {
-  // Fetch YouTube video page like a real browser
-  const pageRes = await fetch(`https://www.youtube.com/watch?v=${videoId}`, {
-    headers: BROWSER_HEADERS,
-  })
-
-  if (!pageRes.ok) throw new Error('Không thể tải trang YouTube')
-
-  const html = await pageRes.text()
-
-  // Extract ytInitialPlayerResponse from the page
-  const match = html.match(/ytInitialPlayerResponse\s*=\s*(\{.+?\})\s*;[\s\n]*(?:var|const|let|\<\/script)/)
-    ?? html.match(/ytInitialPlayerResponse\s*=\s*(\{[\s\S]+?\});\s*\n/)
-
-  if (!match) throw new Error('Không thể parse trang video YouTube')
-
-  let playerResponse: {
-    captions?: {
-      playerCaptionsTracklistRenderer?: {
-        captionTracks?: CaptionTrack[]
-      }
+  const res = await fetch(
+    `https://api.supadata.ai/v1/youtube/transcript?videoId=${videoId}&text=true`,
+    {
+      headers: {
+        'x-api-key': apiKey,
+      },
     }
+  )
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(err?.message ?? `Supadata error: ${res.status}`)
   }
 
-  try {
-    playerResponse = JSON.parse(match[1])
-  } catch {
-    throw new Error('Không thể đọc dữ liệu video')
+  const data = await res.json()
+
+  // data.content is array of {text, offset, duration} or data is plain text
+  if (typeof data === 'string') return data
+  if (data.content && Array.isArray(data.content)) {
+    return data.content.map((c: { text: string }) => c.text).join(' ').replace(/\s+/g, ' ').trim()
   }
+  if (data.transcript) return data.transcript
 
-  const captionTracks = playerResponse?.captions?.playerCaptionsTracklistRenderer?.captionTracks
-
-  if (!captionTracks?.length) {
-    throw new Error('Video này không có transcript/phụ đề')
-  }
-
-  // Prefer: vi > en > any
-  const track = captionTracks.find((t) => t.languageCode === 'vi')
-    ?? captionTracks.find((t) => t.languageCode === 'en')
-    ?? captionTracks[0]
-
-  // Fetch the caption data
-  const captionRes = await fetch(`${track.baseUrl}&fmt=json3`, {
-    headers: BROWSER_HEADERS,
-  })
-
-  if (!captionRes.ok) throw new Error('Không thể tải nội dung transcript')
-
-  const captionData = await captionRes.json()
-
-  const events: { segs?: { utf8: string }[] }[] = captionData.events ?? []
-  const text = events
-    .filter((e) => e.segs)
-    .flatMap((e) => e.segs!.map((s) => s.utf8))
-    .join(' ')
-    .replace(/\n/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim()
-
-  if (!text) throw new Error('Transcript trống')
-
-  return text
+  throw new Error('Không thể đọc transcript từ Supadata')
 }
 
 async function getVideoTitle(videoId: string): Promise<string> {
@@ -110,7 +54,7 @@ export async function POST(req: NextRequest) {
     if (!videoId) return NextResponse.json({ error: 'URL YouTube không hợp lệ' }, { status: 400 })
 
     const [transcript, title] = await Promise.all([
-      fetchTranscriptFromYouTube(videoId),
+      fetchTranscriptSupadata(videoId),
       getVideoTitle(videoId),
     ])
 
