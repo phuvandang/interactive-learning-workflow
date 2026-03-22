@@ -21,12 +21,13 @@ async function fetchTranscriptSupadata(videoId: string): Promise<string> {
 
   const data = await res.json()
 
-  // data.content is array of {text, offset, duration} or data is plain text
-  if (typeof data === 'string') return data
-  if (data.content && Array.isArray(data.content)) {
+  if (typeof data.content === 'string' && data.content) {
+    return data.content.replace(/\n/g, ' ').replace(/\s+/g, ' ').trim()
+  }
+  if (Array.isArray(data.content)) {
     return data.content.map((c: { text: string }) => c.text).join(' ').replace(/\s+/g, ' ').trim()
   }
-  if (data.transcript) return data.transcript
+  if (typeof data === 'string') return data
 
   throw new Error('Không thể đọc transcript từ Supadata')
 }
