@@ -23,6 +23,47 @@ export interface ChatSession {
   updated_at: string
 }
 
+export interface CourseLesson {
+  id: string
+  name: string
+  description?: string
+}
+
+export interface CourseModule {
+  id: string
+  name: string
+  lessons: CourseLesson[]
+}
+
+export interface CourseScenario {
+  company: string
+  role: string
+  goal: string
+}
+
+export interface Course {
+  id: string
+  title: string
+  youtube_url: string
+  youtube_video_id: string
+  language: 'vi' | 'en'
+  transcript?: string
+  scenario: CourseScenario
+  structure: CourseModule[]
+  created_at: string
+}
+
+export interface CourseLessonContent {
+  id: string
+  course_id: string
+  module_id: string
+  lesson_id: string
+  name: string
+  claude_md_content: string
+  order_index: number
+  created_at: string
+}
+
 export type Language = 'vi' | 'en'
 
 export type Step = 'input' | 'generate' | 'preview' | 'done'

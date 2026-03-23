@@ -5,7 +5,8 @@ import StepInput from "@/components/features/StepInput";
 import StepGenerate from "@/components/features/StepGenerate";
 import StepPreview from "@/components/features/StepPreview";
 import StepDone from "@/components/features/StepDone";
-import { Step, Language } from "@/types";
+import StepCoursePreview from "@/components/features/StepCoursePreview";
+import { Step, Language, CourseModule, CourseScenario } from "@/types";
 
 const STEPS: { id: Step; label: string }[] = [
   { id: "input", label: "1. Nhập URL" },
@@ -21,8 +22,24 @@ export default function Home() {
   const [videoTitle, setVideoTitle] = useState("");
   const [transcript, setTranscript] = useState("");
   const [language, setLanguage] = useState<Language>("vi");
+
+  // Logic 1 state
   const [claudeMd, setClaudeMd] = useState("");
   const [savedLessonId, setSavedLessonId] = useState("");
+
+  // Logic 2 state
+  const [courseTitle, setCourseTitle] = useState("");
+  const [courseScenario, setCourseScenario] = useState<CourseScenario | null>(null);
+  const [courseStructure, setCourseStructure] = useState<CourseModule[]>([]);
+  const [isCourseMode, setIsCourseMode] = useState(false);
+
+  function reset() {
+    setStep("input");
+    setVideoUrl(""); setVideoId(""); setVideoTitle(""); setTranscript("");
+    setClaudeMd(""); setSavedLessonId("");
+    setCourseTitle(""); setCourseScenario(null); setCourseStructure([]);
+    setIsCourseMode(false);
+  }
 
   return (
     <div className="py-8">
@@ -41,9 +58,7 @@ export default function Home() {
             >
               {s.label}
             </span>
-            {i < STEPS.length - 1 && (
-              <span className="text-slate-300">→</span>
-            )}
+            {i < STEPS.length - 1 && <span className="text-slate-300">→</span>}
           </div>
         ))}
       </div>
@@ -51,10 +66,8 @@ export default function Home() {
       {step === "input" && (
         <StepInput
           onDone={({ url, videoId, title, transcript }) => {
-            setVideoUrl(url);
-            setVideoId(videoId);
-            setVideoTitle(title);
-            setTranscript(transcript);
+            setVideoUrl(url); setVideoId(videoId);
+            setVideoTitle(title); setTranscript(transcript);
             setStep("generate");
           }}
         />
@@ -67,14 +80,22 @@ export default function Home() {
           language={language}
           onLanguageChange={setLanguage}
           onDone={(md) => {
+            setIsCourseMode(false);
             setClaudeMd(md);
+            setStep("preview");
+          }}
+          onDoneCourse={({ title, scenario, structure }) => {
+            setIsCourseMode(true);
+            setCourseTitle(title);
+            setCourseScenario(scenario);
+            setCourseStructure(structure);
             setStep("preview");
           }}
           onBack={() => setStep("input")}
         />
       )}
 
-      {step === "preview" && (
+      {step === "preview" && !isCourseMode && (
         <StepPreview
           claudeMd={claudeMd}
           videoTitle={videoTitle}
@@ -91,19 +112,24 @@ export default function Home() {
         />
       )}
 
-      {step === "done" && (
+      {step === "preview" && isCourseMode && courseScenario && (
+        <StepCoursePreview
+          courseTitle={courseTitle}
+          scenario={courseScenario}
+          structure={courseStructure}
+          transcript={transcript}
+          videoUrl={videoUrl}
+          videoId={videoId}
+          language={language}
+          onBack={() => setStep("generate")}
+        />
+      )}
+
+      {step === "done" && !isCourseMode && (
         <StepDone
           videoTitle={videoTitle}
           lessonId={savedLessonId}
-          onNew={() => {
-            setStep("input");
-            setVideoUrl("");
-            setVideoId("");
-            setVideoTitle("");
-            setTranscript("");
-            setClaudeMd("");
-            setSavedLessonId("");
-          }}
+          onNew={reset}
         />
       )}
     </div>
