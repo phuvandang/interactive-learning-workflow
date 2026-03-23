@@ -1,25 +1,48 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import { Lesson } from "@/types";
+import { Lesson, ChatSession, ChatMessage } from "@/types";
 
-interface Message {
-  role: "user" | "assistant";
-  content: string;
+function getOrCreateDeviceId(): string {
+  let deviceId = localStorage.getItem("device_id");
+  if (!deviceId) {
+    deviceId = crypto.randomUUID();
+    localStorage.setItem("device_id", deviceId);
+  }
+  return deviceId;
+}
+
+function formatDate(iso: string) {
+  return new Date(iso).toLocaleString("vi-VN", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
 
 export default function LearnPage() {
   const { id } = useParams<{ id: string }>();
   const [lesson, setLesson] = useState<Lesson | null>(null);
   const [loading, setLoading] = useState(true);
-  const [messages, setMessages] = useState<Message[]>([]);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [streaming, setStreaming] = useState(false);
   const [started, setStarted] = useState(false);
+  const [sessions, setSessions] = useState<ChatSession[]>([]);
+  const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
+  const [showHistory, setShowHistory] = useState(false);
+  const [deviceId, setDeviceId] = useState<string>("");
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    const did = getOrCreateDeviceId();
+    setDeviceId(did);
+  }, []);
 
   useEffect(() => {
     async function loadLesson() {
@@ -33,40 +56,71 @@ export default function LearnPage() {
   }, [id]);
 
   useEffect(() => {
+    if (!deviceId || !id) return;
+    async function loadSessions() {
+      const res = await fetch(`/api/sessions?lesson_id=${id}&device_id=${deviceId}`);
+      const data = await res.json();
+      setSessions(data.sessions || []);
+    }
+    loadSessions();
+  }, [deviceId, id]);
+
+  useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, streaming]);
+
+  const saveSession = useCallback(
+    async (msgs: ChatMessage[], sessionId: string | null) => {
+      if (!deviceId || msgs.length === 0) return;
+      if (sessionId) {
+        await fetch("/api/sessions", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id: sessionId, messages: msgs }),
+        });
+      } else {
+        const res = await fetch("/api/sessions", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ lesson_id: id, device_id: deviceId, messages: msgs }),
+        });
+        const data = await res.json();
+        if (data.session) {
+          setCurrentSessionId(data.session.id);
+          setSessions((prev) => [data.session, ...prev]);
+          return data.session.id;
+        }
+      }
+      return sessionId;
+    },
+    [deviceId, id]
+  );
 
   async function sendMessage(userText: string) {
     if (!userText.trim() || streaming) return;
 
-    const newMessages: Message[] = [
+    const newMessages: ChatMessage[] = [
       ...messages,
       { role: "user", content: userText },
     ];
     setMessages(newMessages);
     setInput("");
     setStreaming(true);
-
-    // Add empty assistant message to stream into
     setMessages((prev) => [...prev, { role: "assistant", content: "" }]);
+
+    let accumulated = "";
 
     try {
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          lessonId: id,
-          messages: newMessages,
-        }),
+        body: JSON.stringify({ lessonId: id, messages: newMessages }),
       });
 
-      if (!res.ok) {
-        throw new Error("API error");
-      }
+      if (!res.ok) throw new Error("API error");
 
       const reader = res.body!.getReader();
       const decoder = new TextDecoder();
-      let accumulated = "";
 
       while (true) {
         const { done, value } = await reader.read();
@@ -74,30 +128,64 @@ export default function LearnPage() {
         accumulated += decoder.decode(value, { stream: true });
         setMessages((prev) => {
           const updated = [...prev];
-          updated[updated.length - 1] = {
-            role: "assistant",
-            content: accumulated,
-          };
+          updated[updated.length - 1] = { role: "assistant", content: accumulated };
           return updated;
         });
       }
     } catch {
+      accumulated = "Có lỗi xảy ra. Vui lòng thử lại.";
       setMessages((prev) => {
         const updated = [...prev];
-        updated[updated.length - 1] = {
-          role: "assistant",
-          content: "Có lỗi xảy ra. Vui lòng thử lại.",
-        };
+        updated[updated.length - 1] = { role: "assistant", content: accumulated };
         return updated;
       });
     } finally {
       setStreaming(false);
+      // Auto-save after assistant responds
+      const finalMessages: ChatMessage[] = [
+        ...newMessages,
+        { role: "assistant", content: accumulated },
+      ];
+      const newId = await saveSession(finalMessages, currentSessionId);
+      if (newId && !currentSessionId) setCurrentSessionId(newId);
+      // Refresh sessions list
+      setSessions((prev) =>
+        prev.map((s) =>
+          s.id === (newId || currentSessionId)
+            ? { ...s, messages: finalMessages, updated_at: new Date().toISOString() }
+            : s
+        )
+      );
     }
   }
 
   async function startLesson() {
     setStarted(true);
     await sendMessage("Bắt đầu bài học");
+  }
+
+  function loadSession(session: ChatSession) {
+    setMessages(session.messages);
+    setCurrentSessionId(session.id);
+    setStarted(true);
+    setShowHistory(false);
+  }
+
+  async function deleteSession(sessionId: string) {
+    await fetch(`/api/sessions?id=${sessionId}`, { method: "DELETE" });
+    setSessions((prev) => prev.filter((s) => s.id !== sessionId));
+    if (currentSessionId === sessionId) {
+      setCurrentSessionId(null);
+      setMessages([]);
+      setStarted(false);
+    }
+  }
+
+  function startNewSession() {
+    setMessages([]);
+    setCurrentSessionId(null);
+    setStarted(false);
+    setShowHistory(false);
   }
 
   function handleKeyDown(e: React.KeyboardEvent) {
@@ -127,13 +215,14 @@ export default function LearnPage() {
   }
 
   return (
-    <div className="flex flex-col h-[calc(100vh-120px)]">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-4 flex-shrink-0">
-        <div>
-          <h1 className="font-semibold text-slate-800 text-lg line-clamp-1">
-            {lesson.title}
-          </h1>
+    <div className="flex flex-col flex-1 min-h-0">
+      {/* Compact header */}
+      <div className="flex items-center gap-3 py-3 flex-shrink-0 border-b border-slate-200 bg-slate-50 -mx-4 px-4">
+        <Link href="/library" className="text-slate-500 hover:text-slate-700 flex-shrink-0 text-sm">
+          ←
+        </Link>
+        <div className="flex-1 min-w-0">
+          <h1 className="font-semibold text-slate-800 text-sm truncate">{lesson.title}</h1>
           <a
             href={lesson.youtube_url}
             target="_blank"
@@ -143,28 +232,87 @@ export default function LearnPage() {
             Xem video gốc →
           </a>
         </div>
-        <Link
-          href="/library"
-          className="text-sm text-slate-500 hover:text-slate-700"
+        <button
+          onClick={() => setShowHistory(!showHistory)}
+          className="flex items-center gap-1 text-xs text-slate-500 hover:text-slate-700 flex-shrink-0 border border-slate-200 rounded-lg px-2.5 py-1.5 bg-white"
         >
-          ← Thư viện
-        </Link>
+          <span>📋</span>
+          <span className="hidden sm:inline">Lịch sử</span>
+          {sessions.length > 0 && (
+            <span className="bg-blue-600 text-white rounded-full w-4 h-4 flex items-center justify-center text-[10px] font-medium">
+              {sessions.length}
+            </span>
+          )}
+        </button>
       </div>
 
+      {/* History panel */}
+      {showHistory && (
+        <div className="flex-shrink-0 border-b border-slate-200 bg-slate-50 -mx-4 px-4 py-3 max-h-64 overflow-y-auto">
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-xs font-medium text-slate-600">Lịch sử hội thoại</p>
+            <button
+              onClick={startNewSession}
+              className="text-xs text-blue-600 hover:underline"
+            >
+              + Hội thoại mới
+            </button>
+          </div>
+          {sessions.length === 0 ? (
+            <p className="text-xs text-slate-400 py-2">Chưa có hội thoại nào được lưu.</p>
+          ) : (
+            <div className="space-y-2">
+              {sessions.map((s) => (
+                <div
+                  key={s.id}
+                  className={`flex items-center gap-2 p-2.5 rounded-lg border cursor-pointer transition-colors ${
+                    s.id === currentSessionId
+                      ? "border-blue-300 bg-blue-50"
+                      : "border-slate-200 bg-white hover:border-slate-300"
+                  }`}
+                  onClick={() => loadSession(s)}
+                >
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs text-slate-500">{formatDate(s.updated_at)}</p>
+                    <p className="text-xs text-slate-700 truncate mt-0.5">
+                      {s.messages.filter((m) => m.role === "user").length} câu hỏi •{" "}
+                      {s.messages.find((m) => m.role === "assistant")?.content.slice(0, 50) ?? "..."}
+                    </p>
+                  </div>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); deleteSession(s.id); }}
+                    className="text-red-400 hover:text-red-600 text-xs flex-shrink-0 px-1"
+                  >
+                    ✕
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Chat area */}
-      <div className="flex-1 bg-white rounded-xl border border-slate-200 overflow-hidden flex flex-col">
+      <div className="flex-1 min-h-0 bg-white flex flex-col -mx-4">
         {/* Messages */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-6">
+        <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
           {!started && messages.length === 0 && (
             <div className="flex flex-col items-center justify-center h-full text-center">
               <div className="text-4xl mb-4">🎓</div>
               <h2 className="text-xl font-semibold text-slate-800 mb-2">
                 Sẵn sàng học chưa?
               </h2>
-              <p className="text-slate-500 mb-6 max-w-sm">
-                Claude sẽ dạy bạn nội dung video theo từng phần và sẵn sàng
-                trả lời mọi câu hỏi.
+              <p className="text-slate-500 mb-6 max-w-sm text-sm">
+                Claude sẽ dạy bạn nội dung video theo từng phần và sẵn sàng trả lời mọi câu hỏi.
               </p>
+              {sessions.length > 0 && (
+                <button
+                  onClick={() => setShowHistory(true)}
+                  className="mb-3 text-sm text-slate-500 hover:text-slate-700 border border-slate-200 rounded-xl px-5 py-2.5"
+                >
+                  📋 Xem lại {sessions.length} hội thoại cũ
+                </button>
+              )}
               <button
                 onClick={startLesson}
                 disabled={streaming}
@@ -178,26 +326,24 @@ export default function LearnPage() {
           {messages.map((msg, i) => (
             <div
               key={i}
-              className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
+              className={`flex items-end gap-2 ${msg.role === "user" ? "justify-end" : "justify-start"}`}
             >
               {msg.role === "assistant" && (
-                <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-sm flex-shrink-0 mr-3 mt-1">
+                <div className="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center text-xs flex-shrink-0">
                   🤖
                 </div>
               )}
               <div
-                className={`max-w-[75%] rounded-2xl px-4 py-3 text-sm leading-relaxed ${
+                className={`max-w-[78%] rounded-2xl px-3 py-2.5 text-sm leading-relaxed ${
                   msg.role === "user"
-                    ? "bg-blue-600 text-white"
-                    : "bg-slate-50 text-slate-800 border border-slate-200"
+                    ? "bg-blue-600 text-white rounded-br-sm"
+                    : "bg-slate-100 text-slate-800 rounded-bl-sm"
                 }`}
               >
                 {msg.role === "assistant" ? (
                   <div
                     className="prose prose-sm max-w-none prose-p:my-1 prose-li:my-0.5 prose-headings:my-2"
-                    dangerouslySetInnerHTML={{
-                      __html: renderMarkdown(msg.content),
-                    }}
+                    dangerouslySetInnerHTML={{ __html: renderMarkdown(msg.content) }}
                   />
                 ) : (
                   msg.content
@@ -214,7 +360,7 @@ export default function LearnPage() {
                   )}
               </div>
               {msg.role === "user" && (
-                <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-sm flex-shrink-0 ml-3 mt-1 text-white">
+                <div className="w-6 h-6 rounded-full bg-blue-600 flex items-center justify-center text-xs flex-shrink-0 text-white">
                   👤
                 </div>
               )}
@@ -225,42 +371,29 @@ export default function LearnPage() {
 
         {/* Input */}
         {started && (
-          <div className="border-t border-slate-200 p-4">
-            <div className="flex gap-3 items-end">
+          <div className="border-t border-slate-200 px-4 py-3 bg-white flex-shrink-0">
+            <div className="flex gap-2 items-end">
               <textarea
                 ref={textareaRef}
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={handleKeyDown}
-                placeholder="Hỏi bất kỳ điều gì về video... (Enter để gửi)"
+                placeholder="Hỏi bất kỳ điều gì về video..."
                 rows={1}
-                className="flex-1 border border-slate-300 rounded-xl px-4 py-2.5 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent max-h-32"
-                style={{ minHeight: "44px" }}
+                className="flex-1 border border-slate-300 rounded-2xl px-4 py-2.5 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent max-h-28"
+                style={{ minHeight: "42px" }}
                 disabled={streaming}
               />
               <button
                 onClick={() => sendMessage(input)}
                 disabled={streaming || !input.trim()}
-                className="bg-blue-600 text-white p-2.5 rounded-xl hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex-shrink-0"
+                className="bg-blue-600 text-white p-2.5 rounded-xl hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex-shrink-0"
               >
-                <svg
-                  className="w-5 h-5"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"
-                  />
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
                 </svg>
               </button>
             </div>
-            <p className="text-xs text-slate-400 mt-2">
-              Shift+Enter để xuống dòng
-            </p>
           </div>
         )}
       </div>
@@ -268,7 +401,6 @@ export default function LearnPage() {
   );
 }
 
-// Simple markdown renderer
 function renderMarkdown(text: string): string {
   return text
     .replace(/&/g, "&amp;")

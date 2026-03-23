@@ -25,13 +25,13 @@ export default function Home() {
   const [savedLessonId, setSavedLessonId] = useState("");
 
   return (
-    <div>
+    <div className="py-8">
       {/* Progress stepper */}
-      <div className="flex items-center gap-2 mb-8">
+      <div className="flex flex-wrap items-center gap-2 mb-8">
         {STEPS.map((s, i) => (
           <div key={s.id} className="flex items-center gap-2">
             <span
-              className={`text-sm font-medium px-3 py-1 rounded-full ${
+              className={`text-xs sm:text-sm font-medium px-2.5 sm:px-3 py-1 rounded-full whitespace-nowrap ${
                 step === s.id
                   ? "bg-blue-600 text-white"
                   : STEPS.findIndex((x) => x.id === step) > i

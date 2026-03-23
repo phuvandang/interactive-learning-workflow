@@ -58,7 +58,7 @@ export default function StepInput({ onDone }: Props) {
         <label className="block text-sm font-medium text-slate-700 mb-2">
           YouTube URL
         </label>
-        <div className="flex gap-3">
+        <div className="flex flex-col sm:flex-row gap-3">
           <input
             type="text"
             value={url}

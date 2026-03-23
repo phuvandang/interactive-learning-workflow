@@ -65,9 +65,9 @@ export default function StepPreview({
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
         <h2 className="text-xl font-bold text-slate-800">Preview & Chỉnh Sửa</h2>
-        <div className="flex gap-3">
+        <div className="flex flex-wrap gap-2">
           <button
             onClick={onBack}
             className="text-sm text-slate-500 hover:text-slate-700 px-4 py-2 rounded-lg border border-slate-200 hover:border-slate-300 transition-colors"
@@ -105,7 +105,7 @@ export default function StepPreview({
         <textarea
           value={claudeMd}
           onChange={(e) => onChange(e.target.value)}
-          className="w-full h-[500px] p-6 font-mono text-sm text-slate-700 resize-none focus:outline-none leading-relaxed"
+          className="w-full h-[300px] sm:h-[500px] p-4 sm:p-6 font-mono text-sm text-slate-700 resize-none focus:outline-none leading-relaxed"
           spellCheck={false}
         />
       </div>

@@ -30,7 +30,7 @@ export default function LibraryPage() {
   }
 
   return (
-    <div>
+    <div className="py-8">
       <div className="flex items-center justify-between mb-8">
         <div>
           <h1 className="text-2xl font-bold text-slate-800">Thư Viện Bài Học</h1>
@@ -63,11 +63,11 @@ export default function LibraryPage() {
           {lessons.map((lesson) => (
             <div
               key={lesson.id}
-              className="bg-white rounded-xl border border-slate-200 p-5 flex items-center justify-between hover:border-slate-300 transition-colors"
+              className="bg-white rounded-xl border border-slate-200 p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 hover:border-slate-300 transition-colors"
             >
               <div className="flex-1 min-w-0">
                 <h3 className="font-medium text-slate-800 truncate">{lesson.title}</h3>
-                <div className="flex items-center gap-3 mt-1">
+                <div className="flex flex-wrap items-center gap-2 sm:gap-3 mt-1">
                   <span className="text-xs text-slate-400">{formatDate(lesson.created_at)}</span>
                   <span className="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full">
                     {lesson.language === "vi" ? "🇻🇳 Tiếng Việt" : "🇺🇸 English"}
@@ -82,17 +82,17 @@ export default function LibraryPage() {
                   </a>
                 </div>
               </div>
-              <div className="flex items-center gap-2 ml-4">
+              <div className="flex items-center gap-2 sm:ml-4">
                 <Link
                   href={`/learn/${lesson.id}`}
-                  className="bg-blue-600 text-white text-sm px-4 py-1.5 rounded-lg hover:bg-blue-700 transition-colors font-medium"
+                  className="flex-1 sm:flex-none text-center bg-blue-600 text-white text-sm px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors font-medium"
                 >
                   Học ngay
                 </Link>
                 <button
                   onClick={() => handleDelete(lesson.id)}
                   disabled={deletingId === lesson.id}
-                  className="text-sm text-red-500 hover:text-red-700 px-3 py-1.5 rounded-lg border border-red-100 hover:border-red-200 transition-colors disabled:opacity-50"
+                  className="text-sm text-red-500 hover:text-red-700 px-3 py-2 rounded-lg border border-red-100 hover:border-red-200 transition-colors disabled:opacity-50"
                 >
                   {deletingId === lesson.id ? "..." : "Xóa"}
                 </button>
