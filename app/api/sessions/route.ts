@@ -61,19 +61,23 @@ export async function POST(req: NextRequest) {
   }
 }
 
-// PATCH /api/sessions — update messages in existing session
+// PATCH /api/sessions — update messages or lesson_title in existing session
 export async function PATCH(req: NextRequest) {
   try {
     const supabase = getSupabase()
-    const { id, messages } = await req.json()
+    const { id, messages, lesson_title } = await req.json()
 
-    if (!id || !messages) {
-      return NextResponse.json({ error: 'id and messages required' }, { status: 400 })
+    if (!id || (!messages && lesson_title === undefined)) {
+      return NextResponse.json({ error: 'id and messages or lesson_title required' }, { status: 400 })
     }
+
+    const updates: Record<string, unknown> = { updated_at: new Date().toISOString() }
+    if (messages) updates.messages = messages
+    if (lesson_title !== undefined) updates.lesson_title = lesson_title
 
     const { data, error } = await supabase
       .from('chat_sessions')
-      .update({ messages, updated_at: new Date().toISOString() })
+      .update(updates)
       .eq('id', id)
       .select()
       .single()

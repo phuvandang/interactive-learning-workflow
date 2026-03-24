@@ -45,6 +45,8 @@ export default function LibraryPage() {
   const [chatsLoading, setChatsLoading] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [expandedSources, setExpandedSources] = useState<string | null>(null);
+  const [renamingId, setRenamingId] = useState<string | null>(null);
+  const [renameValue, setRenameValue] = useState("");
 
   useEffect(() => {
     async function fetchAll() {
@@ -94,6 +96,37 @@ export default function LibraryPage() {
     router.push("/");
   }
 
+  function addSourceToLesson(lesson: Lesson) {
+    const srcs = getEffectiveSources(lesson);
+    const data = {
+      type: "lesson",
+      id: lesson.id,
+      existingTranscript: lesson.transcript || "",
+      existingSources: srcs,
+      primaryTitle: lesson.title,
+      primaryVideoId: lesson.youtube_video_id || "",
+      primaryVideoUrl: lesson.youtube_url || "",
+    };
+    localStorage.setItem("add_source_mode", JSON.stringify(data));
+    router.push("/");
+  }
+
+  function addSourceToCourse(course: Course) {
+    const srcs = getCourseSources(course);
+    const transcript = (course as Course & { transcript?: string }).transcript || "";
+    const data = {
+      type: "course",
+      id: course.id,
+      existingTranscript: transcript,
+      existingSources: srcs,
+      primaryTitle: course.title,
+      primaryVideoId: course.youtube_video_id || "",
+      primaryVideoUrl: course.youtube_url || "",
+    };
+    localStorage.setItem("add_source_mode", JSON.stringify(data));
+    router.push("/");
+  }
+
   function reuseFromCourse(course: Course) {
     const srcs = getCourseSources(course);
     const transcript = (course as Course & { transcript?: string }).transcript || "";
@@ -132,6 +165,25 @@ export default function LibraryPage() {
     await fetch(`/api/courses?id=${id}`, { method: "DELETE" });
     setCourses((prev) => prev.filter((c) => c.id !== id));
     setDeletingId(null);
+  }
+
+  function startRenaming(session: ChatSession) {
+    setRenamingId(session.id);
+    setRenameValue(session.lesson_title || "Bài học");
+  }
+
+  async function handleRenameSession(id: string) {
+    const trimmed = renameValue.trim();
+    if (!trimmed) return;
+    await fetch("/api/sessions", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, lesson_title: trimmed }),
+    });
+    setSessions((prev) =>
+      prev.map((s) => (s.id === id ? { ...s, lesson_title: trimmed } : s))
+    );
+    setRenamingId(null);
   }
 
   async function handleDeleteSession(id: string) {
@@ -230,6 +282,13 @@ export default function LibraryPage() {
                           Học ngay
                         </Link>
                         <button
+                          onClick={() => addSourceToLesson(lesson)}
+                          className="text-sm text-slate-600 px-3 py-2 rounded-lg border border-slate-200 hover:border-green-300 hover:text-green-600 hover:bg-green-50 transition-colors"
+                          title="Thêm nguồn mới vào bài học này"
+                        >
+                          ➕ Thêm nguồn
+                        </button>
+                        <button
                           onClick={() => reuseFromLesson(lesson)}
                           className="text-sm text-slate-600 px-3 py-2 rounded-lg border border-slate-200 hover:border-blue-300 hover:text-blue-600 hover:bg-blue-50 transition-colors"
                           title="Tạo bài học/khóa học mới từ cùng nguồn tài liệu"
@@ -255,12 +314,20 @@ export default function LibraryPage() {
                             </div>
                           ))}
                         </div>
-                        <button
-                          onClick={() => reuseFromLesson(lesson)}
-                          className="mt-3 w-full text-sm text-blue-600 font-medium py-2 rounded-lg border border-blue-200 hover:bg-blue-50 transition-colors"
-                        >
-                          ✨ Tạo bài học / khóa học mới từ nguồn này →
-                        </button>
+                        <div className="mt-3 flex gap-2">
+                          <button
+                            onClick={() => addSourceToLesson(lesson)}
+                            className="flex-1 text-sm text-green-600 font-medium py-2 rounded-lg border border-green-200 hover:bg-green-50 transition-colors"
+                          >
+                            ➕ Thêm nguồn mới vào bài học này
+                          </button>
+                          <button
+                            onClick={() => reuseFromLesson(lesson)}
+                            className="flex-1 text-sm text-blue-600 font-medium py-2 rounded-lg border border-blue-200 hover:bg-blue-50 transition-colors"
+                          >
+                            ✨ Tạo mới từ nguồn này →
+                          </button>
+                        </div>
                       </div>
                     )}
                   </div>
@@ -326,6 +393,13 @@ export default function LibraryPage() {
                           </Link>
                         )}
                         <button
+                          onClick={() => addSourceToCourse(course)}
+                          className="text-sm text-slate-600 px-3 py-2 rounded-lg border border-slate-200 hover:border-green-300 hover:text-green-600 hover:bg-green-50 transition-colors"
+                          title="Thêm nguồn mới vào khóa học này"
+                        >
+                          ➕ Thêm nguồn
+                        </button>
+                        <button
                           onClick={() => reuseFromCourse(course)}
                           className="text-sm text-slate-600 px-3 py-2 rounded-lg border border-slate-200 hover:border-blue-300 hover:text-blue-600 hover:bg-blue-50 transition-colors"
                           title="Tạo bài học/khóa học mới từ cùng nguồn tài liệu"
@@ -351,12 +425,20 @@ export default function LibraryPage() {
                             </div>
                           ))}
                         </div>
-                        <button
-                          onClick={() => reuseFromCourse(course)}
-                          className="mt-3 w-full text-sm text-blue-600 font-medium py-2 rounded-lg border border-blue-200 hover:bg-blue-50 transition-colors"
-                        >
-                          ✨ Tạo bài học / khóa học mới từ nguồn này →
-                        </button>
+                        <div className="mt-3 flex gap-2">
+                          <button
+                            onClick={() => addSourceToCourse(course)}
+                            className="flex-1 text-sm text-green-600 font-medium py-2 rounded-lg border border-green-200 hover:bg-green-50 transition-colors"
+                          >
+                            ➕ Thêm nguồn mới vào khóa học này
+                          </button>
+                          <button
+                            onClick={() => reuseFromCourse(course)}
+                            className="flex-1 text-sm text-blue-600 font-medium py-2 rounded-lg border border-blue-200 hover:bg-blue-50 transition-colors"
+                          >
+                            ✨ Tạo mới từ nguồn này →
+                          </button>
+                        </div>
                       </div>
                     )}
                   </div>
@@ -391,9 +473,35 @@ export default function LibraryPage() {
                       <div className="flex items-center gap-2 mb-1">
                         <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full font-medium">💬 Hội thoại</span>
                       </div>
-                      <h3 className="font-medium text-slate-800 truncate">
-                        {session.lesson_title || "Bài học"}
-                      </h3>
+                      {renamingId === session.id ? (
+                        <div className="flex items-center gap-2 mt-0.5">
+                          <input
+                            autoFocus
+                            value={renameValue}
+                            onChange={(e) => setRenameValue(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") handleRenameSession(session.id);
+                              if (e.key === "Escape") setRenamingId(null);
+                            }}
+                            className="flex-1 text-sm font-medium border border-blue-300 rounded-md px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-400"
+                          />
+                          <button onClick={() => handleRenameSession(session.id)} className="text-xs text-white bg-blue-600 hover:bg-blue-700 px-2.5 py-1 rounded-md font-medium">Lưu</button>
+                          <button onClick={() => setRenamingId(null)} className="text-xs text-slate-500 hover:text-slate-700 px-2 py-1 rounded-md border border-slate-200">Hủy</button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-1.5 group">
+                          <h3 className="font-medium text-slate-800 truncate">
+                            {session.lesson_title || "Bài học"}
+                          </h3>
+                          <button
+                            onClick={() => startRenaming(session)}
+                            className="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-slate-600 transition-opacity flex-shrink-0"
+                            title="Đổi tên"
+                          >
+                            ✏️
+                          </button>
+                        </div>
+                      )}
                       <p className="text-xs text-slate-500 mt-0.5 truncate">{preview}</p>
                       <div className="flex flex-wrap items-center gap-2 mt-1.5">
                         <span className="text-xs text-slate-400">{formatDate(session.updated_at)}</span>
