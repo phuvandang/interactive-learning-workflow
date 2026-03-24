@@ -7,7 +7,7 @@ export async function GET() {
     const supabase = getSupabase()
     const { data, error } = await supabase
       .from('lessons')
-      .select('id, title, youtube_url, youtube_video_id, language, claude_md_content, created_at')
+      .select('id, title, youtube_url, youtube_video_id, language, claude_md_content, transcript, sources, created_at')
       .order('created_at', { ascending: false })
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })

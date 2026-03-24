@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Source, SourceType } from "@/types";
 
 interface Props {
@@ -18,6 +18,18 @@ export default function StepInput({ onDone }: Props) {
   const [addMode, setAddMode] = useState<SourceType | null>(null);
   const [ytUrl, setYtUrl] = useState("");
   const [pasteText, setPasteText] = useState("");
+
+  // Check if navigated here from "Tạo mới từ nguồn"
+  useEffect(() => {
+    const raw = localStorage.getItem("reuse_sources");
+    if (!raw) return;
+    localStorage.removeItem("reuse_sources");
+    try {
+      const data = JSON.parse(raw);
+      onDone(data);
+    } catch { /* ignore */ }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   function updateSource(id: string, patch: Partial<Source>) {
