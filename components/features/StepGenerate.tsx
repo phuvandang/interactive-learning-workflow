@@ -6,6 +6,8 @@ import { Language, CourseModule, CourseScenario } from "@/types";
 interface Props {
   videoTitle: string;
   transcript: string;
+  sourcesCount?: number;
+  totalWords?: number;
   language: Language;
   onLanguageChange: (lang: Language) => void;
   onDone: (claudeMd: string) => void;
@@ -24,6 +26,8 @@ const STATUS_MESSAGES = [
 export default function StepGenerate({
   videoTitle,
   transcript,
+  sourcesCount,
+  totalWords,
   language,
   onLanguageChange,
   onDone,
@@ -82,11 +86,15 @@ export default function StepGenerate({
       <h2 className="text-xl font-bold text-slate-800 mb-6">Tạo Bài Học</h2>
 
       <div className="bg-white rounded-xl border border-slate-200 p-6 space-y-6">
-        {/* Video info */}
+        {/* Source info */}
         <div className="p-4 bg-slate-50 rounded-lg">
-          <p className="text-xs text-slate-500 uppercase tracking-wide mb-1">Video</p>
+          <p className="text-xs text-slate-500 uppercase tracking-wide mb-1">Tài liệu</p>
           <p className="font-medium text-slate-800">{videoTitle}</p>
-          <p className="text-sm text-slate-500 mt-1">{transcript.split(" ").length} từ transcript</p>
+          <p className="text-sm text-slate-500 mt-1">
+            {sourcesCount && sourcesCount > 1
+              ? `${sourcesCount} nguồn · ${(totalWords || 0).toLocaleString()} từ`
+              : `${(totalWords || transcript.split(" ").length).toLocaleString()} từ`}
+          </p>
         </div>
 
         {/* Mode selector */}

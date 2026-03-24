@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Language } from "@/types";
+import { Language, SourceMeta } from "@/types";
 
 interface Props {
   claudeMd: string;
@@ -11,6 +11,7 @@ interface Props {
   videoId: string;
   language: Language;
   transcript: string;
+  sources?: SourceMeta[];
   onChange: (md: string) => void;
   onDone: (lessonId?: string) => void;
   onBack: () => void;
@@ -23,6 +24,7 @@ export default function StepPreview({
   videoId,
   language,
   transcript,
+  sources,
   onChange,
   onDone,
   onBack,
@@ -46,6 +48,7 @@ export default function StepPreview({
           language,
           transcript,
           claude_md_content: claudeMd,
+          sources: sources || [],
         }),
       });
       const data = await res.json();

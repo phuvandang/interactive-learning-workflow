@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { CourseModule, CourseScenario, Language } from "@/types";
+import { CourseModule, CourseScenario, Language, SourceMeta } from "@/types";
 
 interface GeneratedLesson {
   module_id: string;
@@ -22,6 +22,7 @@ interface Props {
   videoUrl: string;
   videoId: string;
   language: Language;
+  sources?: SourceMeta[];
   onBack: () => void;
 }
 
@@ -33,6 +34,7 @@ export default function StepCoursePreview({
   videoUrl,
   videoId,
   language,
+  sources,
   onBack,
 }: Props) {
   const router = useRouter();
@@ -118,6 +120,7 @@ export default function StepCoursePreview({
           scenario,
           structure,
           lessons,
+          sources: sources || [],
         }),
       });
       const data = await res.json();

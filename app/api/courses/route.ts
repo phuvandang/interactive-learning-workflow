@@ -22,7 +22,7 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   try {
     const supabase = getSupabase()
-    const { title, youtube_url, youtube_video_id, language, transcript, scenario, structure, lessons } = await req.json()
+    const { title, youtube_url, youtube_video_id, language, transcript, scenario, structure, lessons, sources } = await req.json()
 
     if (!title || !scenario || !structure) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
@@ -31,7 +31,7 @@ export async function POST(req: NextRequest) {
     // Save course
     const { data: course, error: courseError } = await supabase
       .from('courses')
-      .insert({ title, youtube_url, youtube_video_id, language, transcript, scenario, structure })
+      .insert({ title, youtube_url: youtube_url || '', youtube_video_id: youtube_video_id || '', language, transcript, scenario, structure, sources: sources || [] })
       .select()
       .single()
 

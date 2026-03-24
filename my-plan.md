@@ -135,3 +135,93 @@ Table: lessons
 - Chia sẻ bài học qua link public
 - Template khác nhau theo loại video (lecture, tutorial, interview...)
 - Export sang Notion / Google Drive
+
+---
+
+# UPDATE v2 — Multi-Source & Multi-Format
+
+## Tổng Quan
+Mở rộng app từ "chỉ nhận YouTube URL" thành "nhận bất kỳ nguồn tài liệu nào" — nhiều nguồn cùng lúc, nhiều định dạng, tổng hợp thành 1 bài học hoàn chỉnh.
+
+---
+
+## Tính Năng 1: Multi-Source Input
+
+### Mô tả
+User thêm nhiều nguồn tài liệu cùng lúc. Claude tổng hợp tất cả → 1 bài học bao phủ toàn bộ kiến thức từ các nguồn. Output: user tự chọn Logic 1 hoặc Logic 2 như hiện tại.
+
+### UI StepInput (redesign)
+3 nút nguồn: [🔗 Thêm YouTube] [📁 Upload file] [📋 Paste text]
+Mỗi nguồn hiển thị thành 1 card: icon + tên + word count + trạng thái
+Không giới hạn số nguồn. Không cần preview tổng hợp.
+
+### Luồng
+1. User thêm nguồn → mỗi nguồn extract độc lập
+2. Hiện trạng thái: loading / ✓ done / ✗ error
+3. Khi xong → gộp tất cả content → chuyển sang StepGenerate
+4. StepGenerate hiện số nguồn + tổng word count
+
+---
+
+## Tính Năng 2: Multi-Format Input
+
+### Định dạng v1
+| Định dạng | Xử lý |
+|-----------|-------|
+| YouTube URL | Supadata API (đã có) |
+| PDF | Upload → Supabase Storage → extract bằng pdf-parse |
+| Text/paste | Nhận trực tiếp |
+| Audio/video file | v2 |
+
+### Lưu trữ
+File upload → Supabase Storage bucket `source-files`
+Sau extract → lưu text vào DB, giữ file gốc trong Storage
+
+---
+
+## Kỹ Thuật
+
+### Files mới
+- `app/api/extract-pdf/route.ts` — nhận PDF, extract text
+- `app/api/extract-sources/route.ts` — orchestrate nhiều nguồn
+
+### Files sửa
+- `components/features/StepInput.tsx` — redesign multi-source UI
+- `app/page.tsx` — pass combined content
+- `components/features/StepGenerate.tsx` — hiện số nguồn
+
+### Dependencies
+- `pdf-parse` — extract text từ PDF
+
+### SQL
+```sql
+alter table lessons add column if not exists sources jsonb default '[]';
+alter table courses add column if not exists sources jsonb default '[]';
+```
+
+### Supabase Storage
+Bucket: `source-files` / Path: `{device_id}/{timestamp}_{filename}`
+
+---
+
+## Out of Scope v1
+- Audio/video file upload (Whisper) → v2
+- Google Drive, web URL scraping → v2
+
+---
+
+## Thứ Tự Build (Song Song)
+1. Supabase Storage setup + `extract-pdf` API
+2. Redesign StepInput — multi-source UI
+3. `extract-sources` orchestration
+4. Cập nhật StepGenerate + page.tsx
+5. SQL migration
+
+---
+
+## Test Cases
+- [ ] 2 YouTube URL → cả 2 extract thành công → generate bài tổng hợp
+- [ ] Upload PDF → extract đúng nội dung
+- [ ] Paste text → nhận thẳng, hiện word count
+- [ ] 3 nguồn kết hợp → generate bài học bao phủ cả 3
+- [ ] 1 nguồn lỗi → không block, vẫn tiếp tục được

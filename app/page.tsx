@@ -6,10 +6,10 @@ import StepGenerate from "@/components/features/StepGenerate";
 import StepPreview from "@/components/features/StepPreview";
 import StepDone from "@/components/features/StepDone";
 import StepCoursePreview from "@/components/features/StepCoursePreview";
-import { Step, Language, CourseModule, CourseScenario } from "@/types";
+import { Step, Language, CourseModule, CourseScenario, Source } from "@/types";
 
 const STEPS: { id: Step; label: string }[] = [
-  { id: "input", label: "1. Nhập URL" },
+  { id: "input", label: "1. Nhập nguồn" },
   { id: "generate", label: "2. Generate" },
   { id: "preview", label: "3. Preview & Lưu" },
   { id: "done", label: "4. Hoàn thành" },
@@ -17,11 +17,14 @@ const STEPS: { id: Step; label: string }[] = [
 
 export default function Home() {
   const [step, setStep] = useState<Step>("input");
-  const [videoUrl, setVideoUrl] = useState("");
-  const [videoId, setVideoId] = useState("");
-  const [videoTitle, setVideoTitle] = useState("");
-  const [transcript, setTranscript] = useState("");
   const [language, setLanguage] = useState<Language>("vi");
+
+  // Multi-source state
+  const [sources, setSources] = useState<Source[]>([]);
+  const [combinedContent, setCombinedContent] = useState("");
+  const [primaryTitle, setPrimaryTitle] = useState("");
+  const [primaryVideoId, setPrimaryVideoId] = useState("");
+  const [primaryVideoUrl, setPrimaryVideoUrl] = useState("");
 
   // Logic 1 state
   const [claudeMd, setClaudeMd] = useState("");
@@ -35,7 +38,7 @@ export default function Home() {
 
   function reset() {
     setStep("input");
-    setVideoUrl(""); setVideoId(""); setVideoTitle(""); setTranscript("");
+    setSources([]); setCombinedContent(""); setPrimaryTitle(""); setPrimaryVideoId(""); setPrimaryVideoUrl("");
     setClaudeMd(""); setSavedLessonId("");
     setCourseTitle(""); setCourseScenario(null); setCourseStructure([]);
     setIsCourseMode(false);
@@ -65,9 +68,12 @@ export default function Home() {
 
       {step === "input" && (
         <StepInput
-          onDone={({ url, videoId, title, transcript }) => {
-            setVideoUrl(url); setVideoId(videoId);
-            setVideoTitle(title); setTranscript(transcript);
+          onDone={({ sources: srcs, combinedContent: content, primaryTitle: title, primaryVideoId: vidId, primaryVideoUrl: vidUrl }) => {
+            setSources(srcs);
+            setCombinedContent(content);
+            setPrimaryTitle(title);
+            setPrimaryVideoId(vidId);
+            setPrimaryVideoUrl(vidUrl);
             setStep("generate");
           }}
         />
@@ -75,8 +81,10 @@ export default function Home() {
 
       {step === "generate" && (
         <StepGenerate
-          videoTitle={videoTitle}
-          transcript={transcript}
+          videoTitle={primaryTitle}
+          transcript={combinedContent}
+          sourcesCount={sources.length}
+          totalWords={sources.reduce((sum, s) => sum + s.wordCount, 0)}
           language={language}
           onLanguageChange={setLanguage}
           onDone={(md) => {
@@ -98,11 +106,12 @@ export default function Home() {
       {step === "preview" && !isCourseMode && (
         <StepPreview
           claudeMd={claudeMd}
-          videoTitle={videoTitle}
-          videoUrl={videoUrl}
-          videoId={videoId}
+          videoTitle={primaryTitle}
+          videoUrl={primaryVideoUrl}
+          videoId={primaryVideoId}
           language={language}
-          transcript={transcript}
+          transcript={combinedContent}
+          sources={sources.map((s) => ({ type: s.type, label: s.label, wordCount: s.wordCount }))}
           onChange={setClaudeMd}
           onDone={(lessonId) => {
             setSavedLessonId(lessonId || "");
@@ -117,17 +126,18 @@ export default function Home() {
           courseTitle={courseTitle}
           scenario={courseScenario}
           structure={courseStructure}
-          transcript={transcript}
-          videoUrl={videoUrl}
-          videoId={videoId}
+          transcript={combinedContent}
+          videoUrl={primaryVideoUrl}
+          videoId={primaryVideoId}
           language={language}
+          sources={sources.map((s) => ({ type: s.type, label: s.label, wordCount: s.wordCount }))}
           onBack={() => setStep("generate")}
         />
       )}
 
       {step === "done" && !isCourseMode && (
         <StepDone
-          videoTitle={videoTitle}
+          videoTitle={primaryTitle}
           lessonId={savedLessonId}
           onNew={reset}
         />

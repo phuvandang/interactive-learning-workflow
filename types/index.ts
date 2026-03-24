@@ -1,3 +1,24 @@
+export type SourceType = 'youtube' | 'pdf' | 'text'
+export type SourceStatus = 'idle' | 'loading' | 'done' | 'error'
+
+export interface Source {
+  id: string
+  type: SourceType
+  label: string
+  content: string
+  wordCount: number
+  status: SourceStatus
+  error?: string
+  videoId?: string
+  videoUrl?: string
+}
+
+export interface SourceMeta {
+  type: SourceType
+  label: string
+  wordCount: number
+}
+
 export interface Lesson {
   id: string
   title: string
@@ -7,6 +28,7 @@ export interface Lesson {
   transcript: string
   claude_md_content: string
   created_at: string
+  sources?: SourceMeta[]
 }
 
 export interface ChatMessage {
@@ -51,6 +73,7 @@ export interface Course {
   scenario: CourseScenario
   structure: CourseModule[]
   created_at: string
+  sources?: SourceMeta[]
 }
 
 export interface CourseLessonContent {

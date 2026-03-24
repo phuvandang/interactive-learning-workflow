@@ -23,15 +23,15 @@ export async function POST(req: NextRequest) {
   try {
     const supabase = getSupabase()
     const body = await req.json()
-    const { title, youtube_url, youtube_video_id, language, transcript, claude_md_content } = body
+    const { title, youtube_url, youtube_video_id, language, transcript, claude_md_content, sources } = body
 
-    if (!title || !youtube_url || !claude_md_content) {
+    if (!title || !claude_md_content) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
     }
 
     const { data, error } = await supabase
       .from('lessons')
-      .insert({ title, youtube_url, youtube_video_id, language, transcript, claude_md_content })
+      .insert({ title, youtube_url: youtube_url || '', youtube_video_id: youtube_video_id || '', language, transcript, claude_md_content, sources: sources || [] })
       .select()
       .single()
 
