@@ -36,12 +36,15 @@ export default function LearnPage() {
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
   const [showHistory, setShowHistory] = useState(false);
   const [deviceId, setDeviceId] = useState<string>("");
+  const [autoSave, setAutoSave] = useState(true);
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     const did = getOrCreateDeviceId();
     setDeviceId(did);
+    const saved = localStorage.getItem("auto_save_sessions");
+    if (saved === "false") setAutoSave(false);
   }, []);
 
   useEffect(() => {
@@ -69,6 +72,12 @@ export default function LearnPage() {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, streaming]);
 
+  function toggleAutoSave() {
+    const next = !autoSave;
+    setAutoSave(next);
+    localStorage.setItem("auto_save_sessions", String(next));
+  }
+
   const saveSession = useCallback(
     async (msgs: ChatMessage[], sessionId: string | null) => {
       if (!deviceId || msgs.length === 0) return;
@@ -82,7 +91,7 @@ export default function LearnPage() {
         const res = await fetch("/api/sessions", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ lesson_id: id, device_id: deviceId, messages: msgs }),
+          body: JSON.stringify({ lesson_id: id, lesson_title: lesson?.title, device_id: deviceId, messages: msgs }),
         });
         const data = await res.json();
         if (data.session) {
@@ -93,7 +102,7 @@ export default function LearnPage() {
       }
       return sessionId;
     },
-    [deviceId, id]
+    [deviceId, id, lesson]
   );
 
   async function sendMessage(userText: string) {
@@ -146,16 +155,17 @@ export default function LearnPage() {
         ...newMessages,
         { role: "assistant", content: accumulated },
       ];
-      const newId = await saveSession(finalMessages, currentSessionId);
-      if (newId && !currentSessionId) setCurrentSessionId(newId);
-      // Refresh sessions list
-      setSessions((prev) =>
-        prev.map((s) =>
-          s.id === (newId || currentSessionId)
-            ? { ...s, messages: finalMessages, updated_at: new Date().toISOString() }
-            : s
-        )
-      );
+      if (autoSave) {
+        const newId = await saveSession(finalMessages, currentSessionId);
+        if (newId && !currentSessionId) setCurrentSessionId(newId);
+        setSessions((prev) =>
+          prev.map((s) =>
+            s.id === (newId || currentSessionId)
+              ? { ...s, messages: finalMessages, updated_at: new Date().toISOString() }
+              : s
+          )
+        );
+      }
     }
   }
 
@@ -232,18 +242,31 @@ export default function LearnPage() {
             Xem video gốc →
           </a>
         </div>
-        <button
-          onClick={() => setShowHistory(!showHistory)}
-          className="flex items-center gap-1 text-xs text-slate-500 hover:text-slate-700 flex-shrink-0 border border-slate-200 rounded-lg px-2.5 py-1.5 bg-white"
-        >
-          <span>📋</span>
-          <span className="hidden sm:inline">Lịch sử</span>
-          {sessions.length > 0 && (
-            <span className="bg-blue-600 text-white rounded-full w-4 h-4 flex items-center justify-center text-[10px] font-medium">
-              {sessions.length}
-            </span>
-          )}
-        </button>
+        <div className="flex items-center gap-1.5 flex-shrink-0">
+          <button
+            onClick={toggleAutoSave}
+            title={autoSave ? "Đang tự động lưu — bấm để tắt" : "Không lưu — bấm để bật"}
+            className={`flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-lg border transition-colors ${
+              autoSave
+                ? "border-green-200 bg-green-50 text-green-700 hover:bg-green-100"
+                : "border-slate-200 bg-slate-50 text-slate-400 hover:bg-slate-100"
+            }`}
+          >
+            💾 <span className="hidden sm:inline">{autoSave ? "Đang lưu" : "Không lưu"}</span>
+          </button>
+          <button
+            onClick={() => setShowHistory(!showHistory)}
+            className="flex items-center gap-1 text-xs text-slate-500 hover:text-slate-700 border border-slate-200 rounded-lg px-2.5 py-1.5 bg-white"
+          >
+            <span>📋</span>
+            <span className="hidden sm:inline">Lịch sử</span>
+            {sessions.length > 0 && (
+              <span className="bg-blue-600 text-white rounded-full w-4 h-4 flex items-center justify-center text-[10px] font-medium">
+                {sessions.length}
+              </span>
+            )}
+          </button>
+        </div>
       </div>
 
       {/* History panel */}

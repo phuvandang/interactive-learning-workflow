@@ -38,7 +38,9 @@ export interface ChatMessage {
 
 export interface ChatSession {
   id: string
-  lesson_id: string
+  lesson_id?: string | null
+  course_lesson_id?: string | null
+  lesson_title?: string | null
   device_id: string
   messages: ChatMessage[]
   created_at: string

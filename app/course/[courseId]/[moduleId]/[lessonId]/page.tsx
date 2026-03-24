@@ -54,11 +54,14 @@ export default function CourseLessonPage() {
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
   const [deviceId, setDeviceId] = useState("");
+  const [autoSave, setAutoSave] = useState(true);
   const [previousContext, setPreviousContext] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     setDeviceId(getOrCreateDeviceId());
+    const saved = localStorage.getItem("auto_save_sessions");
+    if (saved === "false") setAutoSave(false);
   }, []);
 
   useEffect(() => {
@@ -129,7 +132,12 @@ export default function CourseLessonPage() {
         const res = await fetch("/api/sessions", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ course_lesson_id: lessonContent.id, device_id: deviceId, messages: msgs }),
+          body: JSON.stringify({
+            course_lesson_id: lessonContent.id,
+            lesson_title: `${lessonContent.name} — ${course?.title || ''}`,
+            device_id: deviceId,
+            messages: msgs,
+          }),
         });
         const data = await res.json();
         if (data.session) {
@@ -187,20 +195,28 @@ export default function CourseLessonPage() {
     } finally {
       setStreaming(false);
       const finalMessages: ChatMessage[] = [...newMessages, { role: "assistant", content: accumulated }];
-      const newId = await saveSession(finalMessages, currentSessionId);
-      if (newId && !currentSessionId) setCurrentSessionId(newId as string);
-      setSessions((prev) =>
-        prev.map((s) =>
-          s.id === (newId || currentSessionId)
-            ? { ...s, messages: finalMessages, updated_at: new Date().toISOString() }
-            : s
-        )
-      );
+      if (autoSave) {
+        const newId = await saveSession(finalMessages, currentSessionId);
+        if (newId && !currentSessionId) setCurrentSessionId(newId as string);
+        setSessions((prev) =>
+          prev.map((s) =>
+            s.id === (newId || currentSessionId)
+              ? { ...s, messages: finalMessages, updated_at: new Date().toISOString() }
+              : s
+          )
+        );
+      }
     }
   }, [messages, streaming, lessonContent, previousContext, currentSessionId, saveSession]);
 
   function handleKeyDown(e: React.KeyboardEvent) {
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(input); }
+  }
+
+  function toggleAutoSave() {
+    const next = !autoSave;
+    setAutoSave(next);
+    localStorage.setItem("auto_save_sessions", String(next));
   }
 
   function getNextLesson(): { moduleId: string; lessonId: string } | null {
@@ -272,6 +288,17 @@ export default function CourseLessonPage() {
           </h1>
         </div>
         <div className="flex items-center gap-1.5 flex-shrink-0">
+          <button
+            onClick={toggleAutoSave}
+            title={autoSave ? "Đang tự động lưu — bấm để tắt" : "Không lưu — bấm để bật"}
+            className={`flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-lg border transition-colors ${
+              autoSave
+                ? "border-green-200 bg-green-50 text-green-700 hover:bg-green-100"
+                : "border-slate-200 bg-slate-50 text-slate-400 hover:bg-slate-100"
+            }`}
+          >
+            💾 <span className="hidden sm:inline">{autoSave ? "Đang lưu" : "Không lưu"}</span>
+          </button>
           <button
             onClick={() => { setShowHistory(!showHistory); setSidebarOpen(false); }}
             className="flex items-center gap-1 text-xs text-slate-500 hover:text-slate-700 border border-slate-200 rounded-lg px-2.5 py-1.5 bg-white"
