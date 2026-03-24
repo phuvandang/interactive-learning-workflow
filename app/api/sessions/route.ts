@@ -1,23 +1,31 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabase } from '@/lib/supabase'
 
-// GET /api/sessions?lesson_id=xxx&device_id=xxx
+// GET /api/sessions?lesson_id=xxx&device_id=xxx  OR  ?course_lesson_id=xxx&device_id=xxx
 export async function GET(req: NextRequest) {
   try {
     const supabase = getSupabase()
     const lesson_id = req.nextUrl.searchParams.get('lesson_id')
+    const course_lesson_id = req.nextUrl.searchParams.get('course_lesson_id')
     const device_id = req.nextUrl.searchParams.get('device_id')
 
-    if (!lesson_id || !device_id) {
-      return NextResponse.json({ error: 'lesson_id and device_id required' }, { status: 400 })
+    if ((!lesson_id && !course_lesson_id) || !device_id) {
+      return NextResponse.json({ error: 'lesson_id or course_lesson_id, and device_id required' }, { status: 400 })
     }
 
-    const { data, error } = await supabase
+    let query = supabase
       .from('chat_sessions')
-      .select('id, lesson_id, device_id, messages, created_at, updated_at')
-      .eq('lesson_id', lesson_id)
+      .select('id, lesson_id, course_lesson_id, device_id, messages, created_at, updated_at')
       .eq('device_id', device_id)
       .order('updated_at', { ascending: false })
+
+    if (course_lesson_id) {
+      query = query.eq('course_lesson_id', course_lesson_id)
+    } else {
+      query = query.eq('lesson_id', lesson_id!)
+    }
+
+    const { data, error } = await query
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
     return NextResponse.json({ sessions: data })
@@ -31,15 +39,15 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const supabase = getSupabase()
-    const { lesson_id, device_id, messages } = await req.json()
+    const { lesson_id, course_lesson_id, device_id, messages } = await req.json()
 
-    if (!lesson_id || !device_id || !messages) {
+    if ((!lesson_id && !course_lesson_id) || !device_id || !messages) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
     }
 
     const { data, error } = await supabase
       .from('chat_sessions')
-      .insert({ lesson_id, device_id, messages })
+      .insert({ lesson_id: lesson_id || null, course_lesson_id: course_lesson_id || null, device_id, messages })
       .select()
       .single()
 

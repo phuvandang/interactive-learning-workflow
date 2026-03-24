@@ -3,12 +3,38 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { Course, CourseLessonContent, ChatMessage } from "@/types";
+import { Course, CourseLessonContent, ChatMessage, ChatSession } from "@/types";
 
 function getOrCreateDeviceId(): string {
   let id = localStorage.getItem("device_id");
   if (!id) { id = crypto.randomUUID(); localStorage.setItem("device_id", id); }
   return id;
+}
+
+function formatDate(iso: string) {
+  return new Date(iso).toLocaleString("vi-VN", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
+}
+
+// Save user answers from current lesson to localStorage for context passing
+function saveContextToStorage(courseId: string, moduleId: string, lessonId: string, messages: ChatMessage[]) {
+  const userAnswers = messages
+    .filter((m) => m.role === "user" && m.content !== "Bắt đầu bài học")
+    .map((m) => m.content)
+    .join("\n---\n");
+  if (userAnswers) {
+    localStorage.setItem(`ctx-${courseId}-${moduleId}-${lessonId}`, userAnswers);
+  }
+}
+
+// Load context from previous lesson in localStorage
+function loadPreviousContext(courseId: string, course: Course, moduleId: string, lessonId: string): string | null {
+  const allLessons = course.structure.flatMap((mod) =>
+    mod.lessons.map((l) => ({ moduleId: mod.id, lessonId: l.id }))
+  );
+  const currentIdx = allLessons.findIndex((l) => l.moduleId === moduleId && l.lessonId === lessonId);
+  if (currentIdx <= 0) return null;
+  const prev = allLessons[currentIdx - 1];
+  return localStorage.getItem(`ctx-${courseId}-${prev.moduleId}-${prev.lessonId}`);
 }
 
 export default function CourseLessonPage() {
@@ -17,13 +43,23 @@ export default function CourseLessonPage() {
 
   const [course, setCourse] = useState<Course | null>(null);
   const [lessonContent, setLessonContent] = useState<CourseLessonContent | null>(null);
+  const [allCourseLessons, setAllCourseLessons] = useState<CourseLessonContent[]>([]);
   const [loading, setLoading] = useState(true);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [streaming, setStreaming] = useState(false);
   const [started, setStarted] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
+  const [sessions, setSessions] = useState<ChatSession[]>([]);
+  const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
+  const [deviceId, setDeviceId] = useState("");
+  const [previousContext, setPreviousContext] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setDeviceId(getOrCreateDeviceId());
+  }, []);
 
   useEffect(() => {
     async function load() {
@@ -37,8 +73,11 @@ export default function CourseLessonPage() {
       const found = coursesData.courses?.find((c: Course) => c.id === courseId);
       if (found) setCourse(found);
 
-      const lesson = lessonsData.lessons?.find(
-        (l: CourseLessonContent) => l.module_id === moduleId && l.lesson_id === lessonId
+      const allLessons: CourseLessonContent[] = lessonsData.lessons || [];
+      setAllCourseLessons(allLessons);
+
+      const lesson = allLessons.find(
+        (l) => l.module_id === moduleId && l.lesson_id === lessonId
       );
       if (lesson) setLessonContent(lesson);
       setLoading(false);
@@ -46,17 +85,65 @@ export default function CourseLessonPage() {
     load();
   }, [courseId, moduleId, lessonId]);
 
+  // Load previous context from localStorage when course/lesson is ready
   useEffect(() => {
-    // Reset chat when lesson changes
+    if (course && moduleId && lessonId) {
+      setPreviousContext(loadPreviousContext(courseId, course, moduleId, lessonId));
+    }
+  }, [courseId, course, moduleId, lessonId]);
+
+  // Load sessions for this course lesson
+  useEffect(() => {
+    if (!deviceId || !lessonContent) return;
+    async function loadSessions() {
+      const res = await fetch(`/api/sessions?course_lesson_id=${lessonContent!.id}&device_id=${deviceId}`);
+      const data = await res.json();
+      setSessions(data.sessions || []);
+    }
+    loadSessions();
+  }, [deviceId, lessonContent]);
+
+  // Reset chat when lesson changes
+  useEffect(() => {
     setMessages([]);
     setStarted(false);
+    setCurrentSessionId(null);
+    setShowHistory(false);
   }, [lessonId, moduleId]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  const sendMessage = useCallback(async (userText: string) => {
+  const saveSession = useCallback(
+    async (msgs: ChatMessage[], sessionId: string | null) => {
+      if (!deviceId || !lessonContent || msgs.length === 0) return sessionId;
+      if (sessionId) {
+        await fetch("/api/sessions", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id: sessionId, messages: msgs }),
+        });
+        return sessionId;
+      } else {
+        const res = await fetch("/api/sessions", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ course_lesson_id: lessonContent.id, device_id: deviceId, messages: msgs }),
+        });
+        const data = await res.json();
+        if (data.session) {
+          setCurrentSessionId(data.session.id);
+          setSessions((prev) => [data.session, ...prev]);
+          return data.session.id;
+        }
+      }
+      return sessionId;
+    },
+    [deviceId, lessonContent]
+  );
+
+  const sendMessage = useCallback(async (userText: string, ctxOverride?: string | null) => {
     if (!userText.trim() || streaming || !lessonContent) return;
 
     const newMessages: ChatMessage[] = [...messages, { role: "user", content: userText }];
@@ -70,7 +157,11 @@ export default function CourseLessonPage() {
       const res = await fetch("/api/chat-lesson", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ lessonContent: lessonContent.claude_md_content, messages: newMessages }),
+        body: JSON.stringify({
+          lessonContent: lessonContent.claude_md_content,
+          messages: newMessages,
+          previousContext: ctxOverride !== undefined ? ctxOverride : previousContext,
+        }),
       });
       if (!res.ok) throw new Error("API error");
 
@@ -87,23 +178,75 @@ export default function CourseLessonPage() {
         });
       }
     } catch {
+      accumulated = "Có lỗi xảy ra. Vui lòng thử lại.";
       setMessages((prev) => {
         const updated = [...prev];
-        updated[updated.length - 1] = { role: "assistant", content: "Có lỗi xảy ra. Vui lòng thử lại." };
+        updated[updated.length - 1] = { role: "assistant", content: accumulated };
         return updated;
       });
     } finally {
       setStreaming(false);
+      const finalMessages: ChatMessage[] = [...newMessages, { role: "assistant", content: accumulated }];
+      const newId = await saveSession(finalMessages, currentSessionId);
+      if (newId && !currentSessionId) setCurrentSessionId(newId as string);
+      setSessions((prev) =>
+        prev.map((s) =>
+          s.id === (newId || currentSessionId)
+            ? { ...s, messages: finalMessages, updated_at: new Date().toISOString() }
+            : s
+        )
+      );
     }
-  }, [messages, streaming, lessonContent]);
+  }, [messages, streaming, lessonContent, previousContext, currentSessionId, saveSession]);
 
   function handleKeyDown(e: React.KeyboardEvent) {
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(input); }
   }
 
+  function getNextLesson(): { moduleId: string; lessonId: string } | null {
+    if (!course) return null;
+    const allLessons = course.structure.flatMap((mod) =>
+      mod.lessons.map((l) => ({ moduleId: mod.id, lessonId: l.id }))
+    );
+    const currentIdx = allLessons.findIndex((l) => l.moduleId === moduleId && l.lessonId === lessonId);
+    if (currentIdx >= 0 && currentIdx < allLessons.length - 1) return allLessons[currentIdx + 1];
+    return null;
+  }
+
+  function handleNextLesson() {
+    // Save current context before leaving
+    if (course && messages.length > 0) {
+      saveContextToStorage(courseId, moduleId, lessonId, messages);
+    }
+    const next = getNextLesson();
+    if (next) {
+      router.push(`/course/${courseId}/${next.moduleId}/${next.lessonId}`);
+    }
+  }
+
   function navigateToLesson(mId: string, lId: string) {
+    if (messages.length > 0) {
+      saveContextToStorage(courseId, moduleId, lessonId, messages);
+    }
     setSidebarOpen(false);
     router.push(`/course/${courseId}/${mId}/${lId}`);
+  }
+
+  function loadSession(session: ChatSession) {
+    setMessages(session.messages);
+    setCurrentSessionId(session.id);
+    setStarted(true);
+    setShowHistory(false);
+  }
+
+  async function deleteSession(sessionId: string) {
+    await fetch(`/api/sessions?id=${sessionId}`, { method: "DELETE" });
+    setSessions((prev) => prev.filter((s) => s.id !== sessionId));
+    if (currentSessionId === sessionId) {
+      setCurrentSessionId(null);
+      setMessages([]);
+      setStarted(false);
+    }
   }
 
   if (loading) return <div className="flex items-center justify-center h-64 text-slate-500">Đang tải...</div>;
@@ -114,6 +257,7 @@ export default function CourseLessonPage() {
     </div>
   );
 
+  const nextLesson = getNextLesson();
   const currentLessonName = lessonContent.name;
 
   return (
@@ -127,13 +271,70 @@ export default function CourseLessonPage() {
             {moduleId}.{lessonId} — {currentLessonName}
           </h1>
         </div>
-        <button
-          onClick={() => setSidebarOpen(!sidebarOpen)}
-          className="flex items-center gap-1 text-xs text-slate-500 hover:text-slate-700 border border-slate-200 rounded-lg px-2.5 py-1.5 bg-white flex-shrink-0"
-        >
-          📚 Bài học
-        </button>
+        <div className="flex items-center gap-1.5 flex-shrink-0">
+          <button
+            onClick={() => { setShowHistory(!showHistory); setSidebarOpen(false); }}
+            className="flex items-center gap-1 text-xs text-slate-500 hover:text-slate-700 border border-slate-200 rounded-lg px-2.5 py-1.5 bg-white"
+          >
+            <span>📋</span>
+            {sessions.length > 0 && (
+              <span className="bg-blue-600 text-white rounded-full w-4 h-4 flex items-center justify-center text-[10px] font-medium">
+                {sessions.length}
+              </span>
+            )}
+          </button>
+          <button
+            onClick={() => { setSidebarOpen(!sidebarOpen); setShowHistory(false); }}
+            className="flex items-center gap-1 text-xs text-slate-500 hover:text-slate-700 border border-slate-200 rounded-lg px-2.5 py-1.5 bg-white"
+          >
+            📚 Bài học
+          </button>
+        </div>
       </div>
+
+      {/* History panel */}
+      {showHistory && (
+        <div className="flex-shrink-0 border-b border-slate-200 bg-slate-50 -mx-4 px-4 py-3 max-h-64 overflow-y-auto">
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-xs font-medium text-slate-600">Lịch sử hội thoại</p>
+            <button
+              onClick={() => { setMessages([]); setCurrentSessionId(null); setStarted(false); setShowHistory(false); }}
+              className="text-xs text-blue-600 hover:underline"
+            >
+              + Hội thoại mới
+            </button>
+          </div>
+          {sessions.length === 0 ? (
+            <p className="text-xs text-slate-400 py-2">Chưa có hội thoại nào được lưu.</p>
+          ) : (
+            <div className="space-y-2">
+              {sessions.map((s) => (
+                <div
+                  key={s.id}
+                  className={`flex items-center gap-2 p-2.5 rounded-lg border cursor-pointer transition-colors ${
+                    s.id === currentSessionId ? "border-blue-300 bg-blue-50" : "border-slate-200 bg-white hover:border-slate-300"
+                  }`}
+                  onClick={() => loadSession(s)}
+                >
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs text-slate-500">{formatDate(s.updated_at)}</p>
+                    <p className="text-xs text-slate-700 truncate mt-0.5">
+                      {s.messages.filter((m) => m.role === "user").length} câu hỏi •{" "}
+                      {s.messages.find((m) => m.role === "assistant")?.content.slice(0, 50) ?? "..."}
+                    </p>
+                  </div>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); deleteSession(s.id); }}
+                    className="text-red-400 hover:text-red-600 text-xs flex-shrink-0 px-1"
+                  >
+                    ✕
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Sidebar (lesson list) */}
       {sidebarOpen && (
@@ -151,9 +352,7 @@ export default function CourseLessonPage() {
                       key={lesson.id}
                       onClick={() => navigateToLesson(mod.id, lesson.id)}
                       className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${
-                        isActive
-                          ? "bg-blue-600 text-white"
-                          : "text-slate-600 hover:bg-slate-200"
+                        isActive ? "bg-blue-600 text-white" : "text-slate-600 hover:bg-slate-200"
                       }`}
                     >
                       <span className="text-xs opacity-70 mr-1.5">{lesson.id}</span>
@@ -177,9 +376,25 @@ export default function CourseLessonPage() {
               <p className="text-xs text-slate-400 mb-1">
                 {course.scenario.company} — {course.scenario.role}
               </p>
-              <p className="text-slate-500 text-sm mb-6 max-w-sm">{course.scenario.goal}</p>
+              <p className="text-slate-500 text-sm mb-4 max-w-sm">{course.scenario.goal}</p>
+              {previousContext && (
+                <p className="text-xs text-green-600 mb-4 max-w-sm bg-green-50 px-3 py-2 rounded-lg border border-green-200">
+                  ✓ Đã tải context từ bài trước — Claude sẽ cá nhân hóa bài dạy
+                </p>
+              )}
+              {sessions.length > 0 && (
+                <button
+                  onClick={() => setShowHistory(true)}
+                  className="mb-3 text-sm text-slate-500 hover:text-slate-700 border border-slate-200 rounded-xl px-5 py-2.5"
+                >
+                  📋 Xem lại {sessions.length} hội thoại cũ
+                </button>
+              )}
               <button
-                onClick={() => { setStarted(true); sendMessage("Bắt đầu bài học"); }}
+                onClick={() => {
+                  setStarted(true);
+                  sendMessage("Bắt đầu bài học");
+                }}
                 className="bg-blue-600 text-white px-8 py-3 rounded-xl font-medium hover:bg-blue-700 transition-colors"
               >
                 Bắt đầu bài {moduleId}.{lessonId} →
@@ -217,6 +432,21 @@ export default function CourseLessonPage() {
 
         {started && (
           <div className="border-t border-slate-200 px-4 py-3 bg-white flex-shrink-0">
+            {/* Next lesson button */}
+            {nextLesson && !streaming && messages.length >= 2 && (
+              <button
+                onClick={handleNextLesson}
+                className="w-full mb-2 flex items-center justify-between px-4 py-2.5 bg-green-50 border border-green-200 rounded-xl text-sm text-green-700 font-medium hover:bg-green-100 transition-colors"
+              >
+                <span>Chuyển sang bài tiếp theo</span>
+                <span>→</span>
+              </button>
+            )}
+            {!nextLesson && !streaming && messages.length >= 2 && (
+              <div className="w-full mb-2 flex items-center justify-center px-4 py-2 bg-blue-50 border border-blue-200 rounded-xl text-sm text-blue-700 font-medium">
+                🎉 Bạn đã hoàn thành khóa học!
+              </div>
+            )}
             <div className="flex gap-2 items-end">
               <textarea
                 value={input}

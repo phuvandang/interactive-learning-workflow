@@ -7,15 +7,20 @@ const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
 export async function POST(req: NextRequest) {
   try {
-    const { lessonContent, messages } = await req.json()
+    const { lessonContent, messages, previousContext } = await req.json()
     if (!lessonContent || !messages) {
       return NextResponse.json({ error: 'Missing lessonContent or messages' }, { status: 400 })
     }
+
+    const previousContextSection = previousContext
+      ? `\n---\n\n## Kiến Thức & Kinh Nghiệm Người Học Từ Bài Trước\n${previousContext}\n\nSử dụng thông tin này để:\n- Cá nhân hóa ví dụ và giải thích\n- Tham chiếu đến trải nghiệm thực tế họ đã chia sẻ\n- Xây dựng liên kết giữa kiến thức mới và bài cũ`
+      : ''
 
     const systemPrompt = `Bạn là gia sư AI đang dạy bài học này. Đọc kỹ nội dung bài học và dạy theo đúng cấu trúc.
 
 ## Nội Dung Bài Học
 ${lessonContent}
+${previousContextSection}
 
 ---
 
