@@ -77,26 +77,34 @@ Khi người dùng chia sẻ câu chuyện/vấn đề cá nhân:
 - **Phong cách:** Như người bạn thông minh đang ngồi cạnh giúp đỡ, không phải giáo viên đứng trên bục
 - Dùng markdown để format. Kiên nhẫn, ấm áp, không phán xét.`
 
-    // Stream response
-    const stream = await client.messages.stream({
+    // Keep only last 100 messages to avoid context overflow
+    const trimmedMessages = messages.slice(-100)
+
+    // Stream response — wrap iteration in try/catch so errors are caught
+    const stream = client.messages.stream({
       model: 'claude-sonnet-4-6',
       max_tokens: 2048,
       system: systemPrompt,
-      messages,
+      messages: trimmedMessages,
     })
 
     const encoder = new TextEncoder()
     const readable = new ReadableStream({
       async start(controller) {
-        for await (const chunk of stream) {
-          if (
-            chunk.type === 'content_block_delta' &&
-            chunk.delta.type === 'text_delta'
-          ) {
-            controller.enqueue(encoder.encode(chunk.delta.text))
+        try {
+          for await (const chunk of stream) {
+            if (
+              chunk.type === 'content_block_delta' &&
+              chunk.delta.type === 'text_delta'
+            ) {
+              controller.enqueue(encoder.encode(chunk.delta.text))
+            }
           }
+          controller.close()
+        } catch (streamErr) {
+          console.error('[chat] stream error:', streamErr)
+          controller.error(streamErr)
         }
-        controller.close()
       },
     })
 
@@ -107,7 +115,8 @@ Khi người dùng chia sẻ câu chuyện/vấn đề cá nhân:
       },
     })
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Lỗi không xác định'
+    const message = err instanceof Error ? err.message : String(err)
+    console.error('[chat] error:', message)
     return NextResponse.json({ error: message }, { status: 500 })
   }
 }

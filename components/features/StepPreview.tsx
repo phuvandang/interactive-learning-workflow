@@ -12,6 +12,7 @@ interface Props {
   language: Language;
   transcript: string;
   sources?: SourceMeta[];
+  updateLessonId?: string;
   onChange: (md: string) => void;
   onDone: (lessonId?: string) => void;
   onBack: () => void;
@@ -25,6 +26,7 @@ export default function StepPreview({
   language,
   transcript,
   sources,
+  updateLessonId,
   onChange,
   onDone,
   onBack,
@@ -38,26 +40,33 @@ export default function StepPreview({
     setError("");
 
     try {
-      const res = await fetch("/api/lessons", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          title: videoTitle,
-          youtube_url: videoUrl,
-          youtube_video_id: videoId,
-          language,
-          transcript,
-          claude_md_content: claudeMd,
-          sources: sources || [],
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
+      let lessonId: string;
+      if (updateLessonId) {
+        // Update existing lesson
+        const res = await fetch("/api/lessons", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id: updateLessonId, transcript, claude_md_content: claudeMd, sources: sources || [] }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error);
+        lessonId = updateLessonId;
+      } else {
+        // Create new lesson
+        const res = await fetch("/api/lessons", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ title: videoTitle, youtube_url: videoUrl, youtube_video_id: videoId, language, transcript, claude_md_content: claudeMd, sources: sources || [] }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error);
+        lessonId = data.lesson.id;
+      }
 
       if (redirect) {
-        router.push(`/learn/${data.lesson.id}`);
+        router.push(`/learn/${lessonId}`);
       } else {
-        onDone(data.lesson.id);
+        onDone(lessonId);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Lỗi không xác định");
@@ -77,19 +86,21 @@ export default function StepPreview({
           >
             ← Regenerate
           </button>
-          <button
-            onClick={() => handleSave(false)}
-            disabled={saving}
-            className="text-sm text-slate-600 px-4 py-2 rounded-lg border border-slate-200 hover:border-slate-300 transition-colors disabled:opacity-50"
-          >
-            {saving ? "Đang lưu..." : "Lưu vào thư viện"}
-          </button>
+          {!updateLessonId && (
+            <button
+              onClick={() => handleSave(false)}
+              disabled={saving}
+              className="text-sm text-slate-600 px-4 py-2 rounded-lg border border-slate-200 hover:border-slate-300 transition-colors disabled:opacity-50"
+            >
+              {saving ? "Đang lưu..." : "Lưu vào thư viện"}
+            </button>
+          )}
           <button
             onClick={() => handleSave(true)}
             disabled={saving}
             className="bg-blue-600 text-white px-5 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
-            {saving ? "Đang lưu..." : "🚀 Lưu & Học ngay"}
+            {saving ? "Đang lưu..." : updateLessonId ? "💾 Cập nhật & Học ngay" : "🚀 Lưu & Học ngay"}
           </button>
         </div>
       </div>

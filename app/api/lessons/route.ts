@@ -43,6 +43,28 @@ export async function POST(req: NextRequest) {
   }
 }
 
+// PATCH /api/lessons — update transcript, sources, claude_md_content
+export async function PATCH(req: NextRequest) {
+  try {
+    const supabase = getSupabase()
+    const { id, transcript, sources, claude_md_content } = await req.json()
+    if (!id) return NextResponse.json({ error: 'ID required' }, { status: 400 })
+
+    const { data, error } = await supabase
+      .from('lessons')
+      .update({ transcript, sources: sources || [], claude_md_content, updated_at: new Date().toISOString() })
+      .eq('id', id)
+      .select()
+      .single()
+
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json({ lesson: data })
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Lỗi không xác định'
+    return NextResponse.json({ error: message }, { status: 500 })
+  }
+}
+
 // DELETE /api/lessons?id=xxx
 export async function DELETE(req: NextRequest) {
   try {

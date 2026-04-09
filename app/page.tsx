@@ -26,6 +26,9 @@ export default function Home() {
   const [primaryVideoId, setPrimaryVideoId] = useState("");
   const [primaryVideoUrl, setPrimaryVideoUrl] = useState("");
 
+  // Update mode (when adding sources to existing lesson/course)
+  const [updateMode, setUpdateMode] = useState<{ type: "lesson" | "course"; id: string } | null>(null);
+
   // Logic 1 state
   const [claudeMd, setClaudeMd] = useState("");
   const [savedLessonId, setSavedLessonId] = useState("");
@@ -39,6 +42,7 @@ export default function Home() {
   function reset() {
     setStep("input");
     setSources([]); setCombinedContent(""); setPrimaryTitle(""); setPrimaryVideoId(""); setPrimaryVideoUrl("");
+    setUpdateMode(null);
     setClaudeMd(""); setSavedLessonId("");
     setCourseTitle(""); setCourseScenario(null); setCourseStructure([]);
     setIsCourseMode(false);
@@ -68,12 +72,13 @@ export default function Home() {
 
       {step === "input" && (
         <StepInput
-          onDone={({ sources: srcs, combinedContent: content, primaryTitle: title, primaryVideoId: vidId, primaryVideoUrl: vidUrl }) => {
+          onDone={({ sources: srcs, combinedContent: content, primaryTitle: title, primaryVideoId: vidId, primaryVideoUrl: vidUrl, updateMode: um }) => {
             setSources(srcs);
             setCombinedContent(content);
             setPrimaryTitle(title);
             setPrimaryVideoId(vidId);
             setPrimaryVideoUrl(vidUrl);
+            setUpdateMode(um || null);
             setStep("generate");
           }}
         />
@@ -112,6 +117,7 @@ export default function Home() {
           language={language}
           transcript={combinedContent}
           sources={sources.map((s) => ({ type: s.type, label: s.label, wordCount: s.wordCount }))}
+          updateLessonId={updateMode?.type === "lesson" ? updateMode.id : undefined}
           onChange={setClaudeMd}
           onDone={(lessonId) => {
             setSavedLessonId(lessonId || "");
@@ -131,6 +137,7 @@ export default function Home() {
           videoId={primaryVideoId}
           language={language}
           sources={sources.map((s) => ({ type: s.type, label: s.label, wordCount: s.wordCount }))}
+          updateCourseId={updateMode?.type === "course" ? updateMode.id : undefined}
           onBack={() => setStep("generate")}
         />
       )}

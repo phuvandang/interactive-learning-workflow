@@ -33,22 +33,30 @@ ${previousContextSection}
 - Phong cách: đồng nghiệp thân thiện, không phải giáo viên
 - Dùng markdown để format câu trả lời`
 
-    const stream = await client.messages.stream({
+    // Keep only last 100 messages to avoid context overflow
+    const trimmedMessages = messages.slice(-100)
+
+    const stream = client.messages.stream({
       model: 'claude-sonnet-4-6',
       max_tokens: 2048,
       system: systemPrompt,
-      messages,
+      messages: trimmedMessages,
     })
 
     const encoder = new TextEncoder()
     const readable = new ReadableStream({
       async start(controller) {
-        for await (const chunk of stream) {
-          if (chunk.type === 'content_block_delta' && chunk.delta.type === 'text_delta') {
-            controller.enqueue(encoder.encode(chunk.delta.text))
+        try {
+          for await (const chunk of stream) {
+            if (chunk.type === 'content_block_delta' && chunk.delta.type === 'text_delta') {
+              controller.enqueue(encoder.encode(chunk.delta.text))
+            }
           }
+          controller.close()
+        } catch (streamErr) {
+          console.error('[chat-lesson] stream error:', streamErr)
+          controller.error(streamErr)
         }
-        controller.close()
       },
     })
 

@@ -23,6 +23,7 @@ interface Props {
   videoId: string;
   language: Language;
   sources?: SourceMeta[];
+  updateCourseId?: string;
   onBack: () => void;
 }
 
@@ -35,6 +36,7 @@ export default function StepCoursePreview({
   videoId,
   language,
   sources,
+  updateCourseId,
   onBack,
 }: Props) {
   const router = useRouter();
@@ -108,24 +110,39 @@ export default function StepCoursePreview({
   async function saveCourse(lessons: GeneratedLesson[]) {
     setSaving(true);
     try {
-      const res = await fetch("/api/courses", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          title: courseTitle,
-          youtube_url: videoUrl,
-          youtube_video_id: videoId,
-          language,
-          transcript,
-          scenario,
-          structure,
-          lessons,
-          sources: sources || [],
-        }),
-      });
+      let res: Response;
+      if (updateCourseId) {
+        res = await fetch("/api/courses", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            id: updateCourseId,
+            transcript,
+            sources: sources || [],
+            structure,
+            lessons,
+          }),
+        });
+      } else {
+        res = await fetch("/api/courses", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            title: courseTitle,
+            youtube_url: videoUrl,
+            youtube_video_id: videoId,
+            language,
+            transcript,
+            scenario,
+            structure,
+            lessons,
+            sources: sources || [],
+          }),
+        });
+      }
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
-      setCourseId(data.course.id);
+      setCourseId(updateCourseId || data.course.id);
       setDone(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Lỗi khi lưu khóa học");
@@ -244,7 +261,9 @@ export default function StepCoursePreview({
             onClick={handleGenerateAll}
             className="flex-1 bg-blue-600 text-white py-2.5 rounded-lg font-medium hover:bg-blue-700 transition-colors text-sm"
           >
-            ✨ Tạo {totalLessons} bài học ({Math.ceil(totalLessons * 0.4)} phút)
+            {updateCourseId
+              ? `💾 Cập nhật ${totalLessons} bài học (~${Math.ceil(totalLessons * 0.4)} phút)`
+              : `✨ Tạo ${totalLessons} bài học (~${Math.ceil(totalLessons * 0.4)} phút)`}
           </button>
         </div>
       )}

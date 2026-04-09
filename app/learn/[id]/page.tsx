@@ -108,6 +108,14 @@ export default function LearnPage() {
   async function sendMessage(userText: string) {
     if (!userText.trim() || streaming) return;
 
+    if (userText.trim() === "/clear") {
+      setMessages([]);
+      setCurrentSessionId(null);
+      setStarted(false);
+      setInput("");
+      return;
+    }
+
     const newMessages: ChatMessage[] = [
       ...messages,
       { role: "user", content: userText },
@@ -126,7 +134,10 @@ export default function LearnPage() {
         body: JSON.stringify({ lessonId: id, messages: newMessages }),
       });
 
-      if (!res.ok) throw new Error("API error");
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || `HTTP ${res.status}`);
+      }
 
       const reader = res.body!.getReader();
       const decoder = new TextDecoder();
@@ -141,15 +152,14 @@ export default function LearnPage() {
           return updated;
         });
       }
-    } catch {
-      accumulated = "Có lỗi xảy ra. Vui lòng thử lại.";
-      setMessages((prev) => {
-        const updated = [...prev];
-        updated[updated.length - 1] = { role: "assistant", content: accumulated };
-        return updated;
-      });
+    } catch (err) {
+      // Remove the empty assistant placeholder + user message on error so retry is clean
+      setMessages(messages);
+      const msg = err instanceof Error ? err.message : "Lỗi không xác định";
+      alert(`Lỗi: ${msg}`);
     } finally {
       setStreaming(false);
+      if (!accumulated) return;
       // Auto-save after assistant responds
       const finalMessages: ChatMessage[] = [
         ...newMessages,
@@ -424,8 +434,33 @@ export default function LearnPage() {
   );
 }
 
+function renderTable(block: string): string {
+  const lines = block.trim().split("\n").filter((l) => l.trim());
+  if (lines.length < 3) return block;
+  const headerCells = lines[0].split("|").slice(1, -1).map((c) => c.trim());
+  const bodyLines = lines.slice(2);
+  const thead = `<thead><tr>${headerCells
+    .map((c) => `<th class="border border-slate-300 bg-slate-100 px-3 py-1.5 text-left text-xs font-semibold">${c}</th>`)
+    .join("")}</tr></thead>`;
+  const tbody = bodyLines
+    .map((row) => {
+      const cells = row.split("|").slice(1, -1).map((c) => c.trim());
+      return `<tr>${cells.map((c) => `<td class="border border-slate-300 px-3 py-1.5 text-xs">${c}</td>`).join("")}</tr>`;
+    })
+    .join("");
+  return `<table class="border-collapse border border-slate-300 my-3 w-full text-sm overflow-x-auto">${thead}<tbody>${tbody}</tbody></table>`;
+}
+
 function renderMarkdown(text: string): string {
-  return text
+  // Extract table blocks → replace with placeholders to avoid HTML escaping
+  const tables: string[] = [];
+  text = text.replace(/^(\|.+\|[ \t]*\n)([ \t]*\|[-: |]+\|[ \t]*\n)((?:[ \t]*\|.+\|[ \t]*\n?)+)/gm, (match) => {
+    const idx = tables.length;
+    tables.push(renderTable(match));
+    return `%%TABLE_${idx}%%`;
+  });
+
+  let result = text
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
@@ -438,5 +473,12 @@ function renderMarkdown(text: string): string {
     .replace(/^- (.+)$/gm, "<li class='ml-4 list-disc'>$1</li>")
     .replace(/^(\d+)\. (.+)$/gm, "<li class='ml-4 list-decimal'>$2</li>")
     .replace(/\n\n/g, "</p><p class='mt-2'>")
-    .replace(/\n/g, "<br/>")
+    .replace(/\n/g, "<br/>");
+
+  // Re-insert rendered tables
+  tables.forEach((html, idx) => {
+    result = result.replace(`%%TABLE_${idx}%%`, html);
+  });
+
+  return result;
 }
