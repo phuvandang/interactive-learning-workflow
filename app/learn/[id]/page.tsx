@@ -125,20 +125,20 @@ export default function LearnPage() {
     setStreaming(true);
     setMessages((prev) => [...prev, { role: "assistant", content: "" }]);
 
-    // Build previous context from past sessions (only on first message of new session)
-    let previousContext: string | null = null;
-    if (messages.length === 0 && sessions.length > 0) {
-      const pastUserMessages = sessions
-        .filter((s) => s.id !== currentSessionId)
-        .flatMap((s) => s.messages.filter((m) => m.role === "user" && m.content !== "Bắt đầu bài học"))
-        .map((m) => m.content)
-        .join("\n---\n");
-      if (pastUserMessages.trim()) previousContext = pastUserMessages;
-    }
-
     let accumulated = "";
 
     try {
+      // Build previous context from past sessions (only on first message of new session)
+      let previousContext: string | null = null;
+      if (messages.length === 0 && sessions.length > 0) {
+        const pastUserMessages = sessions
+          .filter((s) => s.id !== currentSessionId)
+          .flatMap((s) => (s.messages || []).filter((m) => m.role === "user" && m.content !== "Bắt đầu bài học"))
+          .map((m) => m.content)
+          .join("\n---\n");
+        if (pastUserMessages.trim()) previousContext = pastUserMessages;
+      }
+
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
