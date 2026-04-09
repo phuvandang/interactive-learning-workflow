@@ -37,6 +37,7 @@ export default function LearnPage() {
   const [showHistory, setShowHistory] = useState(false);
   const [deviceId, setDeviceId] = useState<string>("");
   const [autoSave, setAutoSave] = useState(true);
+  const [chatError, setChatError] = useState("");
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -167,10 +168,14 @@ export default function LearnPage() {
       // Remove the empty assistant placeholder + user message on error so retry is clean
       setMessages(messages);
       const msg = err instanceof Error ? err.message : "Lỗi không xác định";
-      alert(`Lỗi: ${msg}`);
+      setChatError(msg);
     } finally {
       setStreaming(false);
-      if (!accumulated) return;
+      if (!accumulated) {
+        // Remove empty assistant bubble if no response came through
+        setMessages((prev) => prev.filter((m) => m.content !== ""));
+        return;
+      }
       // Auto-save after assistant responds
       const finalMessages: ChatMessage[] = [
         ...newMessages,
@@ -416,6 +421,18 @@ export default function LearnPage() {
         {/* Input */}
         {started && (
           <div className="border-t border-slate-200 px-4 py-3 bg-white flex-shrink-0">
+            {chatError && (
+              <div className="mb-2 flex items-center justify-between gap-2 px-3 py-2 bg-red-50 border border-red-200 rounded-lg text-xs text-red-700">
+                <span>Lỗi: {chatError}</span>
+                <button onClick={() => setChatError("")} className="text-red-400 hover:text-red-600 flex-shrink-0">✕</button>
+              </div>
+            )}
+            {streaming && (
+              <div className="mb-2 flex items-center justify-between gap-2 px-3 py-2 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-700">
+                <span>Đang chờ phản hồi...</span>
+                <button onClick={() => { setStreaming(false); setMessages((prev) => prev.filter((m) => m.content !== "")); }} className="text-amber-600 hover:text-amber-800 flex-shrink-0 font-medium">Huỷ</button>
+              </div>
+            )}
             <div className="flex gap-2 items-end">
               <textarea
                 ref={textareaRef}
