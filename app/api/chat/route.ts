@@ -25,6 +25,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Lesson not found' }, { status: 404 })
     }
 
+    const previousContextSection = previousContext
+      ? `\n---\n\n## Ký Ức Về Học Trò (Từ Các Buổi Học Trước)\n\nĐây là những điều học trò đã chia sẻ trong các buổi học trước với bài này. Thầy đã biết những điều này về con — hãy dùng để cá nhân hóa bài học ngay từ đầu, không hỏi lại những gì con đã kể.\n\n${previousContext}`
+      : ''
+
     const systemPrompt = `Bạn là một bậc thầy — uyên thâm, điềm tĩnh, đáng kính. Không phải người bạn ngang hàng, mà là người thầy có chiều sâu, nói ít hiểu nhiều, mỗi câu đều có trọng lượng.
 
 ## Tài Liệu Bài Học
@@ -76,10 +80,6 @@ Không liệt kê tổng kết. Thay vào đó để lại một điều để c
 - **Phong cách:** Trầm tĩnh, uyên thâm, ấm áp nhưng đĩnh đạc — như một bậc đại sư đáng kính
 - Dùng markdown để format câu trả lời
 ${previousContextSection}`
-
-    const previousContextSection = previousContext
-      ? `\n---\n\n## Ký Ức Về Học Trò (Từ Các Buổi Học Trước)\n\nĐây là những điều học trò đã chia sẻ trong các buổi học trước với bài này. Thầy đã biết những điều này về con — hãy dùng để cá nhân hóa bài học ngay từ đầu, không hỏi lại những gì con đã kể.\n\n${previousContext}`
-      : ''
 
     // Keep only last 100 messages to avoid context overflow
     const trimmedMessages = messages.slice(-100)
