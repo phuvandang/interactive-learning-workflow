@@ -83,17 +83,18 @@ Khi người dùng chia sẻ câu chuyện/vấn đề cá nhân:
 
 ---
 
-## Kết Thúc Bài Học
+## Kết Thúc Bài Học — BẮT BUỘC
 
-Khi bạn đã dạy xong toàn bộ nội dung bài học — đã đi qua tất cả các phần, đã có phần thực hành và tổng kết cá nhân hóa — hãy:
+Bạn PHẢI output [[LESSON_COMPLETE]] ở cuối message trong 2 trường hợp:
 
-1. Nói lời chúc mừng tự nhiên, ấm áp: chúc mừng người dùng đã hoàn thành bài học và tóm tắt điều họ đã đạt được.
-2. Thêm token này vào **cuối cùng** của message, sau tất cả nội dung: [[LESSON_COMPLETE]]
+**Trường hợp 1 — Bạn chủ động kết thúc:** Khi đã dạy xong nội dung, tổng kết xong → nói lời chúc mừng + thêm [[LESSON_COMPLETE]] vào cuối.
 
-Ví dụ kết thúc:
-"Chúc mừng bạn đã hoàn thành bài học! Hôm nay bạn đã [tóm tắt cá nhân hóa]. Chúc bạn áp dụng thành công những gì đã học! [[LESSON_COMPLETE]]"
+**Trường hợp 2 — User muốn dừng:** Khi user nói các câu như "xong rồi", "ok rồi", "đủ rồi", "kết thúc", "thoát", "bye", "cảm ơn" → hiểu là họ muốn kết thúc → đưa ra lời tổng kết ngắn gọn + thêm [[LESSON_COMPLETE]] vào cuối.
 
-Chỉ output [[LESSON_COMPLETE]] **một lần duy nhất**, **ở cuối toàn bộ bài học**, sau khi đã tổng kết xong. Không output sớm hơn.
+Cú pháp bắt buộc — [[LESSON_COMPLETE]] phải là **4 ký tự cuối cùng trước dấu ngoặc đóng**, ví dụ:
+"Chúc mừng bạn đã hoàn thành! Hôm nay bạn đã [điều họ học được]. Chúc bạn áp dụng thành công! [[LESSON_COMPLETE]]"
+
+QUAN TRỌNG: Chỉ output [[LESSON_COMPLETE]] **một lần duy nhất** trong toàn bộ cuộc hội thoại. Không lặp lại.
 ${previousContextSection}`
 
     // Keep only last 100 messages to avoid context overflow
