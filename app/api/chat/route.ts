@@ -9,15 +9,18 @@ const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 const MARKER = '[[LESSON_COMPLETE]]'
 
 // Detect lesson completion even if AI forgot to output the marker.
-// Triggers when the response contains a personalized action plan heading
-// AND the conversation is long enough to have covered real content.
+// Three signals: explicit marker, action plan written, or AI declares lesson done.
 function isLessonComplete(text: string, msgCount: number): boolean {
   if (text.includes(MARKER)) return true
+  const conversationLongEnough = msgCount >= 8
+  if (!conversationLongEnough) return false
+  // AI wrote a personalized action plan (with or without heading)
   const hasActionPlan = /kế hoạch hành động/i.test(text)
-  const hasSummary = /#{1,3}\s*tổng kết/i.test(text)
-  const isSubstantial = text.length > 600
-  const conversationLongEnough = msgCount >= 6
-  return (hasActionPlan || hasSummary) && isSubstantial && conversationLongEnough
+  // AI wrote a summary section
+  const hasSummaryHeading = /#{1,3}\s*tổng kết/i.test(text)
+  // AI declared lesson complete (e.g. "Bài học đã hoàn thành")
+  const hasDonePhrase = /bài học đã hoàn thành|đã hoàn thành bài học/i.test(text)
+  return (hasActionPlan || hasSummaryHeading || hasDonePhrase) && text.length > 300
 }
 
 async function claimCode(lessonId: string, deviceId: string): Promise<string | null> {
@@ -116,13 +119,15 @@ Khi người dùng chia sẻ câu chuyện/vấn đề cá nhân:
 
 ### Bước 4: Tổng Kết Cá Nhân Hóa — KẾT THÚC BÀI HỌC
 
-Sau khi đã dạy xong TOÀN BỘ nội dung, viết phần tổng kết cá nhân hóa. Đây là message CUỐI CÙNG của bài học. Format bắt buộc — message phải kết thúc CHÍNH XÁC như sau:
+Sau khi đã dạy xong TOÀN BỘ nội dung chính: **KHÔNG hỏi người dùng muốn gì tiếp theo, KHÔNG hỏi "Bạn muốn A, B hay C?".** Tự động viết ngay Tổng Kết Cá Nhân Hóa trong cùng message đó.
 
-[Nội dung tổng kết: kế hoạch hành động cụ thể dựa trên câu chuyện của người dùng]
+Tổng Kết là kế hoạch hành động cụ thể DỰA TRÊN câu chuyện và hoàn cảnh thực của người dùng đã chia sẻ trong buổi học. Message phải kết thúc CHÍNH XÁC như sau:
+
+[Nội dung tổng kết và kế hoạch hành động...]
 
 [[LESSON_COMPLETE]]
 
-Dòng [[LESSON_COMPLETE]] là dòng cuối cùng tuyệt đối — không có chữ nào sau đó, không có câu hỏi, không có lời chào. Đây là tín hiệu kỹ thuật ẩn để hệ thống cấp mã hoàn thành cho người dùng.
+Dòng [[LESSON_COMPLETE]] là dòng cuối cùng tuyệt đối — không có chữ nào sau đó, không hỏi thêm, không lời chào. Đây là tín hiệu kỹ thuật ẩn để hệ thống cấp mã hoàn thành cho người dùng.
 
 ---
 
