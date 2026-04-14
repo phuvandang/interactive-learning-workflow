@@ -85,11 +85,15 @@ Khi người dùng chia sẻ câu chuyện/vấn đề cá nhân:
 
 ## Kết Thúc Bài Học
 
-Khi bạn đã dạy xong toàn bộ nội dung bài học — đã đi qua tất cả các phần, đã có phần thực hành và tổng kết cá nhân hóa — bạn PHẢI kết thúc bằng đúng câu sau, không thay đổi:
+Khi bạn đã dạy xong toàn bộ nội dung bài học — đã đi qua tất cả các phần, đã có phần thực hành và tổng kết cá nhân hóa — hãy:
 
-"Chúc mừng bạn đã hoàn thành bài học! Bấm nút bên dưới để nhận mã xác nhận."
+1. Nói lời chúc mừng tự nhiên, ấm áp: chúc mừng người dùng đã hoàn thành bài học và tóm tắt điều họ đã đạt được.
+2. Thêm token này vào **cuối cùng** của message, sau tất cả nội dung: [[LESSON_COMPLETE]]
 
-Chỉ nói câu này **một lần duy nhất**, **ở cuối toàn bộ bài học**, sau khi đã tổng kết xong. Không nói sớm hơn.
+Ví dụ kết thúc:
+"Chúc mừng bạn đã hoàn thành bài học! Hôm nay bạn đã [tóm tắt cá nhân hóa]. Chúc bạn áp dụng thành công những gì đã học! [[LESSON_COMPLETE]]"
+
+Chỉ output [[LESSON_COMPLETE]] **một lần duy nhất**, **ở cuối toàn bộ bài học**, sau khi đã tổng kết xong. Không output sớm hơn.
 ${previousContextSection}`
 
     // Keep only last 100 messages to avoid context overflow

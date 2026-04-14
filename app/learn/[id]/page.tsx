@@ -38,6 +38,7 @@ export default function LearnPage() {
   const [deviceId, setDeviceId] = useState<string>("");
   const [autoSave, setAutoSave] = useState(true);
   const [chatError, setChatError] = useState("");
+  const [lessonCompleted, setLessonCompleted] = useState(false);
   const [completionCode, setCompletionCode] = useState<string | null>(null);
   const [showCodeModal, setShowCodeModal] = useState(false);
   const [claimingCode, setClaimingCode] = useState(false);
@@ -166,13 +167,16 @@ export default function LearnPage() {
       const reader = res.body!.getReader();
       const decoder = new TextDecoder();
 
+      const MARKER = "[[LESSON_COMPLETE]]";
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
         accumulated += decoder.decode(value, { stream: true });
+        // Strip marker from displayed message
+        const displayText = accumulated.replace(MARKER, "").trimEnd();
         setMessages((prev) => {
           const updated = [...prev];
-          updated[updated.length - 1] = { role: "assistant", content: accumulated };
+          updated[updated.length - 1] = { role: "assistant", content: displayText };
           return updated;
         });
       }
@@ -188,10 +192,16 @@ export default function LearnPage() {
         setMessages((prev) => prev.filter((m) => m.content !== ""));
         return;
       }
+      // Detect lesson completion marker
+      const MARKER = "[[LESSON_COMPLETE]]";
+      if (accumulated.includes(MARKER) && !completionCodeRef.current) {
+        setLessonCompleted(true);
+      }
+      const cleanAccumulated = accumulated.replace(MARKER, "").trimEnd();
       // Auto-save after assistant responds
       const finalMessages: ChatMessage[] = [
         ...newMessages,
-        { role: "assistant", content: accumulated },
+        { role: "assistant", content: cleanAccumulated },
       ];
       if (autoSave) {
         const newId = await saveSession(finalMessages, currentSessionId);
@@ -460,7 +470,7 @@ export default function LearnPage() {
               )}
             </div>
           ))}
-          {started && messages.length >= 2 && !completionCode && (
+          {lessonCompleted && !completionCode && (
             <div className="flex justify-center py-4">
               <button
                 onClick={claimCode}
