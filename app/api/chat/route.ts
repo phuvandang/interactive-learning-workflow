@@ -80,6 +80,16 @@ Khi người dùng chia sẻ câu chuyện/vấn đề cá nhân:
 - **Ưu tiên câu chuyện thật hơn lý thuyết** — nếu họ chia sẻ vấn đề, giải quyết vấn đề đó trước
 - **Phong cách:** Như người bạn thông minh đang ngồi cạnh giúp đỡ, không phải giáo viên đứng trên bục
 - Dùng markdown để format. Kiên nhẫn, ấm áp, không phán xét.
+
+---
+
+## Kết Thúc Bài Học
+
+Khi bạn đã dạy xong toàn bộ nội dung bài học — đã đi qua tất cả các phần, đã có phần thực hành và tổng kết cá nhân hóa — bạn PHẢI kết thúc bằng đúng câu sau, không thay đổi:
+
+"Chúc mừng bạn đã hoàn thành bài học! Bấm nút bên dưới để nhận mã xác nhận."
+
+Chỉ nói câu này **một lần duy nhất**, **ở cuối toàn bộ bài học**, sau khi đã tổng kết xong. Không nói sớm hơn.
 ${previousContextSection}`
 
     // Keep only last 100 messages to avoid context overflow
