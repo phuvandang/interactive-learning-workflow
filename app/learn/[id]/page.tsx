@@ -415,6 +415,17 @@ export default function LearnPage() {
               )}
             </div>
           ))}
+          {/* Quick-reply: show "Tiếp tục" after last AI message when not streaming */}
+          {started && !streaming && messages.length > 0 && messages[messages.length - 1].role === "assistant" && !messages[messages.length - 1].content.includes("Mã xác nhận hoàn thành") && (
+            <div className="flex justify-start pl-8">
+              <button
+                onClick={() => sendMessage("Tiếp tục")}
+                className="text-sm text-blue-600 border border-blue-200 bg-blue-50 hover:bg-blue-100 px-4 py-1.5 rounded-full transition-colors"
+              >
+                Tiếp tục →
+              </button>
+            </div>
+          )}
           <div ref={bottomRef} />
         </div>
 
