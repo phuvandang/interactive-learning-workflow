@@ -48,10 +48,8 @@ export default function LearnPage() {
     const saved = localStorage.getItem("auto_save_sessions");
     if (saved === "false") setAutoSave(false);
     // Restore completion code if already earned
-    if (id) {
-      const savedCode = localStorage.getItem(`completion-${id}-${did}`);
-      if (savedCode) setCompletionCode(savedCode);
-    }
+    const savedCode = localStorage.getItem(`completion-${id}-${did}`);
+    if (savedCode) setCompletionCode(savedCode);
   }, [id]);
 
   useEffect(() => {
@@ -198,19 +196,20 @@ export default function LearnPage() {
           )
         );
       }
-      // Client-side completion detection — more reliable than server-side stream append
-      if (!completionCode && deviceId && isLessonCompleteClient(accumulated, newMessages.length)) {
+      // Client-side completion detection — read deviceId from localStorage to avoid stale closure
+      const currentDeviceId = localStorage.getItem("device_id");
+      if (!completionCode && currentDeviceId && isLessonCompleteClient(accumulated, newMessages.length)) {
         try {
           const claimRes = await fetch("/api/completion-codes/claim", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ lessonId: id, deviceId }),
+            body: JSON.stringify({ lessonId: id, deviceId: currentDeviceId }),
           });
           if (claimRes.ok) {
             const claimData = await claimRes.json();
             if (claimData.code) {
               setCompletionCode(claimData.code);
-              localStorage.setItem(`completion-${id}-${deviceId}`, claimData.code);
+              localStorage.setItem(`completion-${id}-${currentDeviceId}`, claimData.code);
             }
           }
         } catch {
