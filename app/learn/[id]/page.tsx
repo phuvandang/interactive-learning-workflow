@@ -42,8 +42,10 @@ export default function LearnPage() {
   const [completionCode, setCompletionCode] = useState<string | null>(null);
   const [showCodeModal, setShowCodeModal] = useState(false);
   const [claimingCode, setClaimingCode] = useState(false);
+  const [codeCopied, setCodeCopied] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const completionCodeRef = useRef<string | null>(null);
 
   useEffect(() => {
     const did = getOrCreateDeviceId();
@@ -54,6 +56,10 @@ export default function LearnPage() {
     const savedCode = localStorage.getItem(`completion_code_${id}`);
     if (savedCode) setCompletionCode(savedCode);
   }, [id]);
+
+  useEffect(() => {
+    completionCodeRef.current = completionCode;
+  }, [completionCode]);
 
   useEffect(() => {
     async function loadLesson() {
@@ -185,7 +191,7 @@ export default function LearnPage() {
       }
       // Detect lesson completion signal
       const COMPLETION_SIGNAL = "Bấm nút bên dưới để nhận mã xác nhận"
-      if (accumulated.includes(COMPLETION_SIGNAL) && !completionCode) {
+      if (accumulated.includes(COMPLETION_SIGNAL) && !completionCodeRef.current) {
         setShowCompletionButton(true);
       }
 
@@ -253,10 +259,10 @@ export default function LearnPage() {
         setShowCompletionButton(false);
         setShowCodeModal(true);
       } else {
-        alert(data.error || "Lỗi khi nhận mã. Vui lòng thử lại.");
+        setChatError(data.error || "Lỗi khi nhận mã. Vui lòng thử lại.");
       }
     } catch {
-      alert("Lỗi kết nối. Vui lòng thử lại.");
+      setChatError("Lỗi kết nối. Vui lòng thử lại.");
     } finally {
       setClaimingCode(false);
     }
@@ -544,12 +550,18 @@ export default function LearnPage() {
             </p>
             <div className="flex gap-2">
               <button
-                onClick={() => {
-                  navigator.clipboard.writeText(completionCode);
+                onClick={async () => {
+                  try {
+                    await navigator.clipboard.writeText(completionCode);
+                    setCodeCopied(true);
+                    setTimeout(() => setCodeCopied(false), 2000);
+                  } catch {
+                    setChatError("Không thể copy — hãy copy thủ công.");
+                  }
                 }}
                 className="flex-1 border border-slate-200 text-slate-700 px-4 py-2.5 rounded-xl text-sm font-medium hover:bg-slate-50 transition-colors"
               >
-                Copy mã
+                {codeCopied ? "Đã copy! ✓" : "Copy mã"}
               </button>
               <button
                 onClick={() => setShowCodeModal(false)}
