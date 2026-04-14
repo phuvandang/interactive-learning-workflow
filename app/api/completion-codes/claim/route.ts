@@ -5,19 +5,27 @@ export async function POST(req: NextRequest) {
   try {
     const { lessonId, deviceId } = await req.json()
 
-    if (!lessonId || !deviceId) {
-      return NextResponse.json({ error: 'Missing lessonId or deviceId' }, { status: 400 })
+    if (
+      typeof lessonId !== 'string' || typeof deviceId !== 'string' ||
+      lessonId.length > 100 || deviceId.length > 200
+    ) {
+      return NextResponse.json({ error: 'Invalid input' }, { status: 400 })
     }
 
     const supabase = getSupabase()
 
     // Check if this device already has a code for this lesson
-    const { data: existing } = await supabase
+    const { data: existing, error: existingError } = await supabase
       .from('completion_codes')
       .select('code')
       .eq('lesson_id', lessonId)
       .eq('device_id', deviceId)
       .maybeSingle()
+
+    if (existingError) {
+      console.error('[claim] idempotency check error:', existingError.message)
+      return NextResponse.json({ error: 'Lỗi hệ thống' }, { status: 500 })
+    }
 
     if (existing) {
       return NextResponse.json({ code: existing.code })
@@ -45,21 +53,29 @@ export async function POST(req: NextRequest) {
     }
 
     // Mark as used
-    const { error: updateError } = await supabase
+    const { data: updated, error: updateError } = await supabase
       .from('completion_codes')
       .update({ device_id: deviceId, used_at: new Date().toISOString() })
       .eq('id', unused.id)
       .is('device_id', null) // guard against race condition
+      .select('code')
+      .maybeSingle()
 
     if (updateError) {
       console.error('[claim] update error:', updateError.message)
       return NextResponse.json({ error: 'Lỗi hệ thống' }, { status: 500 })
     }
 
-    return NextResponse.json({ code: unused.code })
+    if (!updated) {
+      return NextResponse.json(
+        { error: 'Mã vừa được cấp cho thiết bị khác. Vui lòng thử lại.' },
+        { status: 409 }
+      )
+    }
+
+    return NextResponse.json({ code: updated.code })
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err)
-    console.error('[claim] error:', message)
-    return NextResponse.json({ error: message }, { status: 500 })
+    console.error('[claim] unexpected error:', err)
+    return NextResponse.json({ error: 'Lỗi hệ thống' }, { status: 500 })
   }
 }
