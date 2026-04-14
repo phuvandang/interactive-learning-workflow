@@ -522,7 +522,7 @@ function isLessonCompleteClient(text: string, msgCount: number): boolean {
   if (msgCount < 6) return false
   const hasActionPlan = /kế hoạch hành động/i.test(text)
   const hasSummaryHeading = /#{1,3}\s*tổng kết/i.test(text)
-  const hasDonePhrase = /bài học đã hoàn thành|đã hoàn thành bài học|hoàn thành toàn bộ|bài cuối cùng|không còn bài|đây là bài cuối|lộ trình.*hoàn thành|hoàn thành.*lộ trình/i.test(text)
+  const hasDonePhrase = /bài học đã hoàn thành|đã hoàn thành bài học|hoàn thành toàn bộ|bài cuối cùng|phần cuối cùng|không còn bài|đây là bài cuối|lộ trình.*hoàn thành|hoàn thành.*lộ trình/i.test(text)
   return (hasActionPlan || hasSummaryHeading || hasDonePhrase) && text.length > 200
 }
 

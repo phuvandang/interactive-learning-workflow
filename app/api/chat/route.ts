@@ -79,7 +79,10 @@ Sau đó:
 1. Công nhận câu trả lời, kết nối với hoàn cảnh cụ thể của họ
 2. Tóm tắt 1 câu takeaway của phần này
 3. Nếu **còn phần tiếp**: hỏi "Tiếp tục phần X.Y+1 chưa?" (hoặc user có thể gõ số bất kỳ)
-4. Nếu **đã hết tất cả các phần**: KHÔNG hỏi thêm — viết ngay Tổng Kết (xem Giai đoạn 3)
+4. Nếu **đây là phần cuối cùng trong danh sách**: KHÔNG hỏi thêm, KHÔNG đề nghị học phần còn thiếu — viết ngay Tổng Kết (xem Giai đoạn 3)
+
+**QUY TẮC QUAN TRỌNG — Khi user nhảy thẳng đến phần cuối cùng:**
+Dù user có học đủ các phần trước hay không, sau khi dạy xong phần cuối cùng trong danh sách: VIẾT NGAY Tổng Kết cá nhân hóa + [[LESSON_COMPLETE]]. KHÔNG hỏi "bạn muốn học phần còn thiếu không?" hay "bạn muốn A/B/C?".
 
 ---
 
