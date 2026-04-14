@@ -8,6 +8,18 @@ const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
 const MARKER = '[[LESSON_COMPLETE]]'
 
+// Detect lesson completion even if AI forgot to output the marker.
+// Triggers when the response contains a personalized action plan heading
+// AND the conversation is long enough to have covered real content.
+function isLessonComplete(text: string, msgCount: number): boolean {
+  if (text.includes(MARKER)) return true
+  const hasActionPlan = /kế hoạch hành động/i.test(text)
+  const hasSummary = /#{1,3}\s*tổng kết/i.test(text)
+  const isSubstantial = text.length > 600
+  const conversationLongEnough = msgCount >= 6
+  return (hasActionPlan || hasSummary) && isSubstantial && conversationLongEnough
+}
+
 async function claimCode(lessonId: string, deviceId: string): Promise<string | null> {
   const supabase = getSupabase()
 
@@ -102,9 +114,15 @@ Khi người dùng chia sẻ câu chuyện/vấn đề cá nhân:
 3. **Áp dụng bài học vào câu chuyện cụ thể của họ:** Đưa ra hướng giải quyết thực tế dựa trên nội dung video
 4. **Hỏi thêm để đào sâu:** "Vậy theo bạn, bước đầu tiên bạn có thể thử là gì?"
 
-### Bước 4: Tổng Kết Cá Nhân Hóa
+### Bước 4: Tổng Kết Cá Nhân Hóa — KẾT THÚC BÀI HỌC
 
-Ở cuối bài, tạo kế hoạch hành động cụ thể DỰA TRÊN câu chuyện và vấn đề họ đã chia sẻ — không phải kế hoạch chung chung.
+Sau khi đã dạy xong TOÀN BỘ nội dung, viết phần tổng kết cá nhân hóa. Đây là message CUỐI CÙNG của bài học. Format bắt buộc — message phải kết thúc CHÍNH XÁC như sau:
+
+[Nội dung tổng kết: kế hoạch hành động cụ thể dựa trên câu chuyện của người dùng]
+
+[[LESSON_COMPLETE]]
+
+Dòng [[LESSON_COMPLETE]] là dòng cuối cùng tuyệt đối — không có chữ nào sau đó, không có câu hỏi, không có lời chào. Đây là tín hiệu kỹ thuật ẩn để hệ thống cấp mã hoàn thành cho người dùng.
 
 ---
 
@@ -114,28 +132,7 @@ Khi người dùng chia sẻ câu chuyện/vấn đề cá nhân:
 - **Không dạy generic** — mỗi ví dụ phải liên quan đến hoàn cảnh của người này
 - **Ưu tiên câu chuyện thật hơn lý thuyết** — nếu họ chia sẻ vấn đề, giải quyết vấn đề đó trước
 - **Phong cách:** Như người bạn thông minh đang ngồi cạnh giúp đỡ, không phải giáo viên đứng trên bục
-- Dùng markdown để format. Kiên nhẫn, ấm áp, không phán xét.
-
----
-
-## Kết Thúc Bài Học — TÍN HIỆU BẮT BUỘC
-
-Bài học kết thúc TỰ ĐỘNG khi bạn đã hoàn thành ĐỦ 2 điều kiện sau:
-
-**Điều kiện 1:** Đã dạy xong TOÀN BỘ nội dung chính trong tài liệu bài học — bao gồm tất cả các bước, khái niệm, và ví dụ cốt lõi.
-
-**Điều kiện 2:** Đã viết xong phần **Tổng Kết Cá Nhân Hóa** — kế hoạch hành động cụ thể dựa trên câu chuyện và hoàn cảnh thực của người dùng (không phải tổng kết chung chung).
-
-Khi và CHỈ KHI đã hoàn thành cả 2 điều kiện trên, thêm token sau vào CUỐI CÙNG của message Tổng Kết, ngay sau dấu chấm cuối cùng:
-
-[[LESSON_COMPLETE]]
-
-**Lưu ý bắt buộc:**
-- KHÔNG output token này nếu chưa dạy hết nội dung — dù người dùng nói "xong", "bye", "cảm ơn" hay bất kỳ câu gì
-- KHÔNG output nếu chưa viết xong Tổng Kết Cá Nhân Hóa
-- Nếu người dùng muốn kết thúc sớm, hãy tóm tắt nhanh những gì còn lại rồi viết Tổng Kết luôn — SAU ĐÓ mới output token
-- Chỉ output MỘT LẦN duy nhất trong toàn bộ cuộc hội thoại
-- Đây là tín hiệu kỹ thuật ẩn — hệ thống sẽ tự xử lý, người dùng sẽ không thấy nó${previousContextSection}`
+- Dùng markdown để format. Kiên nhẫn, ấm áp, không phán xét.${previousContextSection}`
 
     // Keep only last 100 messages to avoid context overflow
     const trimmedMessages = messages.slice(-100)
@@ -163,8 +160,9 @@ Khi và CHỈ KHI đã hoàn thành cả 2 điều kiện trên, thêm token sau
             }
           }
 
-          // After Claude finishes: if marker detected, claim code and inject into stream
-          if (fullText.includes(MARKER) && deviceId) {
+          // After Claude finishes: inject code if lesson is complete
+          // (either via explicit marker or server-side pattern detection)
+          if (isLessonComplete(fullText, trimmedMessages.length) && deviceId) {
             const code = await claimCode(lessonId, deviceId)
             if (code) {
               const codeText = `\n\n---\n\n🏆 **Mã xác nhận hoàn thành của bạn:** \`${code}\`\n\n*Lưu mã này và gửi cho quản lý để xác nhận bạn đã hoàn thành bài học.*`
