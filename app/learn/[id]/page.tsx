@@ -38,6 +38,10 @@ export default function LearnPage() {
   const [deviceId, setDeviceId] = useState<string>("");
   const [autoSave, setAutoSave] = useState(true);
   const [chatError, setChatError] = useState("");
+  const [showCompletionButton, setShowCompletionButton] = useState(false);
+  const [completionCode, setCompletionCode] = useState<string | null>(null);
+  const [showCodeModal, setShowCodeModal] = useState(false);
+  const [claimingCode, setClaimingCode] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -46,7 +50,10 @@ export default function LearnPage() {
     setDeviceId(did);
     const saved = localStorage.getItem("auto_save_sessions");
     if (saved === "false") setAutoSave(false);
-  }, []);
+    // Load previously claimed code if exists
+    const savedCode = localStorage.getItem(`completion_code_${id}`);
+    if (savedCode) setCompletionCode(savedCode);
+  }, [id]);
 
   useEffect(() => {
     async function loadLesson() {
@@ -176,6 +183,12 @@ export default function LearnPage() {
         setMessages((prev) => prev.filter((m) => m.content !== ""));
         return;
       }
+      // Detect lesson completion signal
+      const COMPLETION_SIGNAL = "Bấm nút bên dưới để nhận mã xác nhận"
+      if (accumulated.includes(COMPLETION_SIGNAL) && !completionCode) {
+        setShowCompletionButton(true);
+      }
+
       // Auto-save after assistant responds
       const finalMessages: ChatMessage[] = [
         ...newMessages,
@@ -224,6 +237,31 @@ export default function LearnPage() {
     setShowHistory(false);
   }
 
+  async function claimCode() {
+    if (!deviceId || !id || claimingCode) return;
+    setClaimingCode(true);
+    try {
+      const res = await fetch("/api/completion-codes/claim", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ lessonId: id, deviceId }),
+      });
+      const data = await res.json();
+      if (data.code) {
+        setCompletionCode(data.code);
+        localStorage.setItem(`completion_code_${id}`, data.code);
+        setShowCompletionButton(false);
+        setShowCodeModal(true);
+      } else {
+        alert(data.error || "Lỗi khi nhận mã. Vui lòng thử lại.");
+      }
+    } catch {
+      alert("Lỗi kết nối. Vui lòng thử lại.");
+    } finally {
+      setClaimingCode(false);
+    }
+  }
+
   function handleKeyDown(e: React.KeyboardEvent) {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
@@ -269,6 +307,15 @@ export default function LearnPage() {
           </a>
         </div>
         <div className="flex items-center gap-1.5 flex-shrink-0">
+          {completionCode && (
+            <button
+              onClick={() => setShowCodeModal(true)}
+              className="flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-lg border border-green-300 bg-green-50 text-green-700 hover:bg-green-100 transition-colors"
+              title="Xem mã hoàn thành của bạn"
+            >
+              ✓ <span className="hidden sm:inline">Đã hoàn thành</span>
+            </button>
+          )}
           <button
             onClick={toggleAutoSave}
             title={autoSave ? "Đang tự động lưu — bấm để tắt" : "Không lưu — bấm để bật"}
@@ -415,6 +462,24 @@ export default function LearnPage() {
               )}
             </div>
           ))}
+          {showCompletionButton && !completionCode && (
+            <div className="flex justify-center py-4">
+              <button
+                onClick={claimCode}
+                disabled={claimingCode}
+                className="bg-green-600 text-white px-6 py-3 rounded-xl font-medium hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              >
+                {claimingCode ? (
+                  <>
+                    <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    Đang cấp mã...
+                  </>
+                ) : (
+                  "🏆 Nhận mã hoàn thành"
+                )}
+              </button>
+            </div>
+          )}
           <div ref={bottomRef} />
         </div>
 
@@ -458,6 +523,44 @@ export default function LearnPage() {
           </div>
         )}
       </div>
+
+      {/* Completion Code Modal */}
+      {showCodeModal && completionCode && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 px-4">
+          <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-xl">
+            <div className="text-center mb-4">
+              <div className="text-4xl mb-2">🏆</div>
+              <h2 className="text-lg font-bold text-slate-800">Chúc mừng!</h2>
+              <p className="text-sm text-slate-500 mt-1">Bạn đã hoàn thành bài học</p>
+            </div>
+            <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 text-center mb-4">
+              <p className="text-xs text-slate-400 mb-1">Mã xác nhận của bạn</p>
+              <p className="text-2xl font-mono font-bold tracking-widest text-slate-800">
+                {completionCode}
+              </p>
+            </div>
+            <p className="text-xs text-slate-500 text-center mb-4">
+              Lưu mã này lại và gửi cho quản lý để xác nhận bạn đã hoàn thành bài học.
+            </p>
+            <div className="flex gap-2">
+              <button
+                onClick={() => {
+                  navigator.clipboard.writeText(completionCode);
+                }}
+                className="flex-1 border border-slate-200 text-slate-700 px-4 py-2.5 rounded-xl text-sm font-medium hover:bg-slate-50 transition-colors"
+              >
+                Copy mã
+              </button>
+              <button
+                onClick={() => setShowCodeModal(false)}
+                className="flex-1 bg-slate-800 text-white px-4 py-2.5 rounded-xl text-sm font-medium hover:bg-slate-700 transition-colors"
+              >
+                Đóng
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
