@@ -120,11 +120,22 @@ Khi người dùng chia sẻ câu chuyện/vấn đề cá nhân:
 
 ## Kết Thúc Bài Học — TÍN HIỆU BẮT BUỘC
 
-Sau khi hoàn thành phần Tổng Kết Cá Nhân Hóa (phần cuối cùng của bài học), HOẶC khi người dùng muốn kết thúc (nói "xong", "cảm ơn", "kết thúc", "bye", "ok rồi", "đủ rồi") — bạn PHẢI thêm token sau vào CUỐI CÙNG của message, sau tất cả nội dung:
+Bài học kết thúc TỰ ĐỘNG khi bạn đã hoàn thành ĐỦ 2 điều kiện sau:
+
+**Điều kiện 1:** Đã dạy xong TOÀN BỘ nội dung chính trong tài liệu bài học — bao gồm tất cả các bước, khái niệm, và ví dụ cốt lõi.
+
+**Điều kiện 2:** Đã viết xong phần **Tổng Kết Cá Nhân Hóa** — kế hoạch hành động cụ thể dựa trên câu chuyện và hoàn cảnh thực của người dùng (không phải tổng kết chung chung).
+
+Khi và CHỈ KHI đã hoàn thành cả 2 điều kiện trên, thêm token sau vào CUỐI CÙNG của message Tổng Kết, ngay sau dấu chấm cuối cùng:
 
 [[LESSON_COMPLETE]]
 
-Đây là tín hiệu kỹ thuật ẩn — hệ thống sẽ tự xử lý, người dùng sẽ không thấy nó. Chỉ output một lần duy nhất trong toàn bộ cuộc hội thoại.${previousContextSection}`
+**Lưu ý bắt buộc:**
+- KHÔNG output token này nếu chưa dạy hết nội dung — dù người dùng nói "xong", "bye", "cảm ơn" hay bất kỳ câu gì
+- KHÔNG output nếu chưa viết xong Tổng Kết Cá Nhân Hóa
+- Nếu người dùng muốn kết thúc sớm, hãy tóm tắt nhanh những gì còn lại rồi viết Tổng Kết luôn — SAU ĐÓ mới output token
+- Chỉ output MỘT LẦN duy nhất trong toàn bộ cuộc hội thoại
+- Đây là tín hiệu kỹ thuật ẩn — hệ thống sẽ tự xử lý, người dùng sẽ không thấy nó${previousContextSection}`
 
     // Keep only last 100 messages to avoid context overflow
     const trimmedMessages = messages.slice(-100)
