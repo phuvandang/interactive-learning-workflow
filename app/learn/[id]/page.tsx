@@ -38,7 +38,6 @@ export default function LearnPage() {
   const [deviceId, setDeviceId] = useState<string>("");
   const [autoSave, setAutoSave] = useState(true);
   const [chatError, setChatError] = useState("");
-  const [showCompletionButton, setShowCompletionButton] = useState(false);
   const [completionCode, setCompletionCode] = useState<string | null>(null);
   const [showCodeModal, setShowCodeModal] = useState(false);
   const [claimingCode, setClaimingCode] = useState(false);
@@ -189,12 +188,6 @@ export default function LearnPage() {
         setMessages((prev) => prev.filter((m) => m.content !== ""));
         return;
       }
-      // Detect lesson completion signal
-      const COMPLETION_SIGNAL = "Bấm nút bên dưới để nhận mã xác nhận"
-      if (accumulated.includes(COMPLETION_SIGNAL) && !completionCodeRef.current) {
-        setShowCompletionButton(true);
-      }
-
       // Auto-save after assistant responds
       const finalMessages: ChatMessage[] = [
         ...newMessages,
@@ -256,7 +249,6 @@ export default function LearnPage() {
       if (data.code) {
         setCompletionCode(data.code);
         localStorage.setItem(`completion_code_${id}`, data.code);
-        setShowCompletionButton(false);
         setShowCodeModal(true);
       } else {
         setChatError(data.error || "Lỗi khi nhận mã. Vui lòng thử lại.");
@@ -468,7 +460,7 @@ export default function LearnPage() {
               )}
             </div>
           ))}
-          {showCompletionButton && !completionCode && (
+          {started && messages.length >= 2 && !completionCode && (
             <div className="flex justify-center py-4">
               <button
                 onClick={claimCode}
