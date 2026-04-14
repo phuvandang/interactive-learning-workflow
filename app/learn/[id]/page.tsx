@@ -47,9 +47,26 @@ export default function LearnPage() {
     setDeviceId(did);
     const saved = localStorage.getItem("auto_save_sessions");
     if (saved === "false") setAutoSave(false);
-    // Restore completion code if already earned
+    // Restore completion code from localStorage first
     const savedCode = localStorage.getItem(`completion-${id}-${did}`);
-    if (savedCode) setCompletionCode(savedCode);
+    if (savedCode) {
+      setCompletionCode(savedCode);
+    } else {
+      // Fallback: check DB in case localStorage was cleared
+      fetch("/api/completion-codes/claim", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ lessonId: id, deviceId: did, checkOnly: true }),
+      })
+        .then((r) => r.json())
+        .then((data) => {
+          if (data.code) {
+            setCompletionCode(data.code);
+            localStorage.setItem(`completion-${id}-${did}`, data.code);
+          }
+        })
+        .catch(() => {});
+    }
   }, [id]);
 
   useEffect(() => {
@@ -198,22 +215,23 @@ export default function LearnPage() {
       }
       // Client-side completion detection — read deviceId from localStorage to avoid stale closure
       const currentDeviceId = localStorage.getItem("device_id");
-      if (!completionCode && currentDeviceId && isLessonCompleteClient(accumulated, newMessages.length)) {
+      const isComplete = isLessonCompleteClient(accumulated, newMessages.length);
+      console.log('[completion] check', { msgCount: newMessages.length, isComplete, hasMarker: accumulated.includes('[[LESSON_COMPLETE]]'), textLen: accumulated.length, completionCode });
+      if (!completionCode && currentDeviceId && isComplete) {
         try {
           const claimRes = await fetch("/api/completion-codes/claim", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ lessonId: id, deviceId: currentDeviceId }),
           });
-          if (claimRes.ok) {
-            const claimData = await claimRes.json();
-            if (claimData.code) {
-              setCompletionCode(claimData.code);
-              localStorage.setItem(`completion-${id}-${currentDeviceId}`, claimData.code);
-            }
+          const claimData = await claimRes.json();
+          console.log('[completion] claim result', { ok: claimRes.ok, claimData });
+          if (claimRes.ok && claimData.code) {
+            setCompletionCode(claimData.code);
+            localStorage.setItem(`completion-${id}-${currentDeviceId}`, claimData.code);
           }
-        } catch {
-          // Silent fail — user can still get code next message
+        } catch (claimErr) {
+          console.error('[completion] claim error', claimErr);
         }
       }
     }

@@ -3,7 +3,7 @@ import { getSupabase } from '@/lib/supabase'
 
 export async function POST(req: NextRequest) {
   try {
-    const { lessonId, deviceId } = await req.json()
+    const { lessonId, deviceId, checkOnly } = await req.json()
 
     if (
       typeof lessonId !== 'string' || typeof deviceId !== 'string' ||
@@ -29,6 +29,11 @@ export async function POST(req: NextRequest) {
 
     if (existing) {
       return NextResponse.json({ code: existing.code })
+    }
+
+    // checkOnly: only return if already claimed, don't claim a new one
+    if (checkOnly) {
+      return NextResponse.json({})
     }
 
     // Claim an unused code
