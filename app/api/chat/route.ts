@@ -6,59 +6,9 @@ export const maxDuration = 120
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
-const MARKER = '[[LESSON_COMPLETE]]'
-
-// Detect lesson completion even if AI forgot to output the marker.
-// Three signals: explicit marker, action plan written, or AI declares lesson done.
-function isLessonComplete(text: string, msgCount: number): boolean {
-  if (text.includes(MARKER)) return true
-  const conversationLongEnough = msgCount >= 8
-  if (!conversationLongEnough) return false
-  // AI wrote a personalized action plan (with or without heading)
-  const hasActionPlan = /kế hoạch hành động/i.test(text)
-  // AI wrote a summary section
-  const hasSummaryHeading = /#{1,3}\s*tổng kết/i.test(text)
-  // AI declared lesson complete (e.g. "Bài học đã hoàn thành")
-  const hasDonePhrase = /bài học đã hoàn thành|đã hoàn thành bài học/i.test(text)
-  return (hasActionPlan || hasSummaryHeading || hasDonePhrase) && text.length > 300
-}
-
-async function claimCode(lessonId: string, deviceId: string): Promise<string | null> {
-  const supabase = getSupabase()
-
-  // Return existing code if already claimed
-  const { data: existing } = await supabase
-    .from('completion_codes')
-    .select('code')
-    .eq('lesson_id', lessonId)
-    .eq('device_id', deviceId)
-    .maybeSingle()
-  if (existing) return existing.code
-
-  // Claim an unused code
-  const { data: unused } = await supabase
-    .from('completion_codes')
-    .select('id, code')
-    .eq('lesson_id', lessonId)
-    .is('device_id', null)
-    .limit(1)
-    .maybeSingle()
-  if (!unused) return null
-
-  const { data: updated } = await supabase
-    .from('completion_codes')
-    .update({ device_id: deviceId, used_at: new Date().toISOString() })
-    .eq('id', unused.id)
-    .is('device_id', null)
-    .select('code')
-    .maybeSingle()
-
-  return updated?.code ?? null
-}
-
 export async function POST(req: NextRequest) {
   try {
-    const { lessonId, messages, previousContext, deviceId } = await req.json()
+    const { lessonId, messages, previousContext } = await req.json()
     if (!lessonId || !messages) {
       return NextResponse.json({ error: 'Missing lessonId or messages' }, { status: 400 })
     }
@@ -150,7 +100,6 @@ Dòng [[LESSON_COMPLETE]] là dòng cuối cùng tuyệt đối — không có c
     })
 
     const encoder = new TextEncoder()
-    let fullText = ''
 
     const readable = new ReadableStream({
       async start(controller) {
@@ -160,21 +109,9 @@ Dòng [[LESSON_COMPLETE]] là dòng cuối cùng tuyệt đối — không có c
               chunk.type === 'content_block_delta' &&
               chunk.delta.type === 'text_delta'
             ) {
-              fullText += chunk.delta.text
               controller.enqueue(encoder.encode(chunk.delta.text))
             }
           }
-
-          // After Claude finishes: inject code if lesson is complete
-          // (either via explicit marker or server-side pattern detection)
-          if (isLessonComplete(fullText, trimmedMessages.length) && deviceId) {
-            const code = await claimCode(lessonId, deviceId)
-            if (code) {
-              const codeText = `\n\n---\n\n🏆 **Mã xác nhận hoàn thành của bạn:** \`${code}\`\n\n*Lưu mã này và gửi cho quản lý để xác nhận bạn đã hoàn thành bài học.*`
-              controller.enqueue(encoder.encode(codeText))
-            }
-          }
-
           controller.close()
         } catch (streamErr) {
           console.error('[chat] stream error:', streamErr)

@@ -38,6 +38,7 @@ export default function LearnPage() {
   const [deviceId, setDeviceId] = useState<string>("");
   const [autoSave, setAutoSave] = useState(true);
   const [chatError, setChatError] = useState("");
+  const [completionCode, setCompletionCode] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -46,7 +47,12 @@ export default function LearnPage() {
     setDeviceId(did);
     const saved = localStorage.getItem("auto_save_sessions");
     if (saved === "false") setAutoSave(false);
-  }, []);
+    // Restore completion code if already earned
+    if (id) {
+      const savedCode = localStorage.getItem(`completion-${id}-${did}`);
+      if (savedCode) setCompletionCode(savedCode);
+    }
+  }, [id]);
 
   useEffect(() => {
     async function loadLesson() {
@@ -191,6 +197,25 @@ export default function LearnPage() {
               : s
           )
         );
+      }
+      // Client-side completion detection — more reliable than server-side stream append
+      if (!completionCode && deviceId && isLessonCompleteClient(accumulated, newMessages.length)) {
+        try {
+          const claimRes = await fetch("/api/completion-codes/claim", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ lessonId: id, deviceId }),
+          });
+          if (claimRes.ok) {
+            const claimData = await claimRes.json();
+            if (claimData.code) {
+              setCompletionCode(claimData.code);
+              localStorage.setItem(`completion-${id}-${deviceId}`, claimData.code);
+            }
+          }
+        } catch {
+          // Silent fail — user can still get code next message
+        }
       }
     }
   }
@@ -415,8 +440,8 @@ export default function LearnPage() {
               )}
             </div>
           ))}
-          {/* Quick-reply: show "Tiếp tục" after last AI message when not streaming */}
-          {started && !streaming && messages.length > 0 && messages[messages.length - 1].role === "assistant" && !messages[messages.length - 1].content.includes("Mã xác nhận hoàn thành") && (
+          {/* Quick-reply: show "Tiếp tục" after last AI message when not streaming, hide once lesson is complete */}
+          {started && !streaming && !completionCode && messages.length > 0 && messages[messages.length - 1].role === "assistant" && (
             <div className="flex justify-start pl-8">
               <button
                 onClick={() => sendMessage("Tiếp tục")}
@@ -428,6 +453,25 @@ export default function LearnPage() {
           )}
           <div ref={bottomRef} />
         </div>
+
+        {/* Completion code banner */}
+        {completionCode && (
+          <div className="flex-shrink-0 mx-0 border-t-2 border-green-400 bg-green-50 px-4 py-3">
+            <p className="text-xs font-semibold text-green-700 mb-1">🏆 Bạn đã hoàn thành bài học!</p>
+            <p className="text-xs text-green-600 mb-2">Sao chép mã bên dưới và gửi cho quản lý để xác nhận:</p>
+            <div className="flex items-center gap-2">
+              <code className="flex-1 bg-white border border-green-300 rounded-lg px-3 py-2 text-sm font-mono font-bold text-green-800 tracking-widest text-center">
+                {completionCode}
+              </code>
+              <button
+                onClick={() => navigator.clipboard.writeText(completionCode)}
+                className="flex-shrink-0 text-xs bg-green-600 text-white px-3 py-2 rounded-lg hover:bg-green-700 transition-colors"
+              >
+                Sao chép
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Input */}
         {started && (
@@ -472,6 +516,15 @@ export default function LearnPage() {
 
     </div>
   );
+}
+
+function isLessonCompleteClient(text: string, msgCount: number): boolean {
+  if (text.includes('[[LESSON_COMPLETE]]')) return true
+  if (msgCount < 6) return false
+  const hasActionPlan = /kế hoạch hành động/i.test(text)
+  const hasSummaryHeading = /#{1,3}\s*tổng kết/i.test(text)
+  const hasDonePhrase = /bài học đã hoàn thành|đã hoàn thành bài học|hoàn thành toàn bộ|bài cuối cùng|không còn bài|đây là bài cuối|lộ trình.*hoàn thành|hoàn thành.*lộ trình/i.test(text)
+  return (hasActionPlan || hasSummaryHeading || hasDonePhrase) && text.length > 200
 }
 
 function renderTable(block: string): string {
