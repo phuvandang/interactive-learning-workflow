@@ -6,9 +6,44 @@ export const maxDuration = 120
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
+const MARKER = '[[LESSON_COMPLETE]]'
+
+async function claimCode(lessonId: string, deviceId: string): Promise<string | null> {
+  const supabase = getSupabase()
+
+  // Return existing code if already claimed
+  const { data: existing } = await supabase
+    .from('completion_codes')
+    .select('code')
+    .eq('lesson_id', lessonId)
+    .eq('device_id', deviceId)
+    .maybeSingle()
+  if (existing) return existing.code
+
+  // Claim an unused code
+  const { data: unused } = await supabase
+    .from('completion_codes')
+    .select('id, code')
+    .eq('lesson_id', lessonId)
+    .is('device_id', null)
+    .limit(1)
+    .maybeSingle()
+  if (!unused) return null
+
+  const { data: updated } = await supabase
+    .from('completion_codes')
+    .update({ device_id: deviceId, used_at: new Date().toISOString() })
+    .eq('id', unused.id)
+    .is('device_id', null)
+    .select('code')
+    .maybeSingle()
+
+  return updated?.code ?? null
+}
+
 export async function POST(req: NextRequest) {
   try {
-    const { lessonId, messages, previousContext } = await req.json()
+    const { lessonId, messages, previousContext, deviceId } = await req.json()
     if (!lessonId || !messages) {
       return NextResponse.json({ error: 'Missing lessonId or messages' }, { status: 400 })
     }
@@ -83,24 +118,17 @@ Khi người dùng chia sẻ câu chuyện/vấn đề cá nhân:
 
 ---
 
-## Kết Thúc Bài Học — BẮT BUỘC
+## Kết Thúc Bài Học — TÍN HIỆU BẮT BUỘC
 
-Bạn PHẢI output [[LESSON_COMPLETE]] ở cuối message trong 2 trường hợp:
+Sau khi hoàn thành phần Tổng Kết Cá Nhân Hóa (phần cuối cùng của bài học), HOẶC khi người dùng muốn kết thúc (nói "xong", "cảm ơn", "kết thúc", "bye", "ok rồi", "đủ rồi") — bạn PHẢI thêm token sau vào CUỐI CÙNG của message, sau tất cả nội dung:
 
-**Trường hợp 1 — Bạn chủ động kết thúc:** Khi đã dạy xong nội dung, tổng kết xong → nói lời chúc mừng + thêm [[LESSON_COMPLETE]] vào cuối.
+[[LESSON_COMPLETE]]
 
-**Trường hợp 2 — User muốn dừng:** Khi user nói các câu như "xong rồi", "ok rồi", "đủ rồi", "kết thúc", "thoát", "bye", "cảm ơn" → hiểu là họ muốn kết thúc → đưa ra lời tổng kết ngắn gọn + thêm [[LESSON_COMPLETE]] vào cuối.
-
-Cú pháp bắt buộc — [[LESSON_COMPLETE]] phải là **4 ký tự cuối cùng trước dấu ngoặc đóng**, ví dụ:
-"Chúc mừng bạn đã hoàn thành! Hôm nay bạn đã [điều họ học được]. Chúc bạn áp dụng thành công! [[LESSON_COMPLETE]]"
-
-QUAN TRỌNG: Chỉ output [[LESSON_COMPLETE]] **một lần duy nhất** trong toàn bộ cuộc hội thoại. Không lặp lại.
-${previousContextSection}`
+Đây là tín hiệu kỹ thuật ẩn — hệ thống sẽ tự xử lý, người dùng sẽ không thấy nó. Chỉ output một lần duy nhất trong toàn bộ cuộc hội thoại.${previousContextSection}`
 
     // Keep only last 100 messages to avoid context overflow
     const trimmedMessages = messages.slice(-100)
 
-    // Stream response — wrap iteration in try/catch so errors are caught
     const stream = client.messages.stream({
       model: 'claude-sonnet-4-6',
       max_tokens: 2048,
@@ -109,6 +137,8 @@ ${previousContextSection}`
     })
 
     const encoder = new TextEncoder()
+    let fullText = ''
+
     const readable = new ReadableStream({
       async start(controller) {
         try {
@@ -117,9 +147,20 @@ ${previousContextSection}`
               chunk.type === 'content_block_delta' &&
               chunk.delta.type === 'text_delta'
             ) {
+              fullText += chunk.delta.text
               controller.enqueue(encoder.encode(chunk.delta.text))
             }
           }
+
+          // After Claude finishes: if marker detected, claim code and inject into stream
+          if (fullText.includes(MARKER) && deviceId) {
+            const code = await claimCode(lessonId, deviceId)
+            if (code) {
+              const codeText = `\n\n---\n\n🏆 **Mã xác nhận hoàn thành của bạn:** \`${code}\`\n\n*Lưu mã này và gửi cho quản lý để xác nhận bạn đã hoàn thành bài học.*`
+              controller.enqueue(encoder.encode(codeText))
+            }
+          }
+
           controller.close()
         } catch (streamErr) {
           console.error('[chat] stream error:', streamErr)

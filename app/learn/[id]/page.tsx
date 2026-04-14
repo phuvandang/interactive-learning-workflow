@@ -38,21 +38,15 @@ export default function LearnPage() {
   const [deviceId, setDeviceId] = useState<string>("");
   const [autoSave, setAutoSave] = useState(true);
   const [chatError, setChatError] = useState("");
-  const [completionCode, setCompletionCode] = useState<string | null>(null);
-  const [showCodeModal, setShowCodeModal] = useState(false);
-  const [claimingCode, setClaimingCode] = useState(false);
-  const [codeCopied, setCodeCopied] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
   useEffect(() => {
     const did = getOrCreateDeviceId();
     setDeviceId(did);
     const saved = localStorage.getItem("auto_save_sessions");
     if (saved === "false") setAutoSave(false);
-    // Load previously claimed code if exists
-    const savedCode = localStorage.getItem(`completion_code_${id}`);
-    if (savedCode) setCompletionCode(savedCode);
-  }, [id]);
+  }, []);
 
   useEffect(() => {
     async function loadLesson() {
@@ -149,7 +143,7 @@ export default function LearnPage() {
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ lessonId: id, messages: newMessages, previousContext }),
+        body: JSON.stringify({ lessonId: id, messages: newMessages, previousContext, deviceId }),
       });
 
       if (!res.ok) {
@@ -230,30 +224,6 @@ export default function LearnPage() {
     setShowHistory(false);
   }
 
-  async function claimCode() {
-    if (!deviceId || !id || claimingCode) return;
-    setClaimingCode(true);
-    try {
-      const res = await fetch("/api/completion-codes/claim", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ lessonId: id, deviceId }),
-      });
-      const data = await res.json();
-      if (data.code) {
-        setCompletionCode(data.code);
-        localStorage.setItem(`completion_code_${id}`, data.code);
-        setShowCodeModal(true);
-      } else {
-        setChatError(data.error || "Lỗi khi nhận mã. Vui lòng thử lại.");
-      }
-    } catch {
-      setChatError("Lỗi kết nối. Vui lòng thử lại.");
-    } finally {
-      setClaimingCode(false);
-    }
-  }
-
   function handleKeyDown(e: React.KeyboardEvent) {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
@@ -299,15 +269,6 @@ export default function LearnPage() {
           </a>
         </div>
         <div className="flex items-center gap-1.5 flex-shrink-0">
-          {completionCode && (
-            <button
-              onClick={() => setShowCodeModal(true)}
-              className="flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-lg border border-green-300 bg-green-50 text-green-700 hover:bg-green-100 transition-colors"
-              title="Xem mã hoàn thành của bạn"
-            >
-              ✓ <span className="hidden sm:inline">Đã hoàn thành</span>
-            </button>
-          )}
           <button
             onClick={toggleAutoSave}
             title={autoSave ? "Đang tự động lưu — bấm để tắt" : "Không lưu — bấm để bật"}
@@ -431,7 +392,7 @@ export default function LearnPage() {
                 {msg.role === "assistant" ? (
                   <div
                     className="prose prose-sm max-w-none prose-p:my-1 prose-li:my-0.5 prose-headings:my-2"
-                    dangerouslySetInnerHTML={{ __html: renderMarkdown(msg.content) }}
+                    dangerouslySetInnerHTML={{ __html: renderMarkdown(msg.content.replace('[[LESSON_COMPLETE]]', '')) }}
                   />
                 ) : (
                   msg.content
@@ -454,24 +415,6 @@ export default function LearnPage() {
               )}
             </div>
           ))}
-          {messages.length >= 4 && !completionCode && (
-            <div className="flex justify-center py-4">
-              <button
-                onClick={claimCode}
-                disabled={claimingCode}
-                className="bg-green-600 text-white px-6 py-3 rounded-xl font-medium hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-              >
-                {claimingCode ? (
-                  <>
-                    <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                    Đang cấp mã...
-                  </>
-                ) : (
-                  "🏆 Nhận mã hoàn thành"
-                )}
-              </button>
-            </div>
-          )}
           <div ref={bottomRef} />
         </div>
 
@@ -516,49 +459,6 @@ export default function LearnPage() {
         )}
       </div>
 
-      {/* Completion Code Modal */}
-      {showCodeModal && completionCode && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 px-4">
-          <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-xl">
-            <div className="text-center mb-4">
-              <div className="text-4xl mb-2">🏆</div>
-              <h2 className="text-lg font-bold text-slate-800">Chúc mừng!</h2>
-              <p className="text-sm text-slate-500 mt-1">Bạn đã hoàn thành bài học</p>
-            </div>
-            <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 text-center mb-4">
-              <p className="text-xs text-slate-400 mb-1">Mã xác nhận của bạn</p>
-              <p className="text-2xl font-mono font-bold tracking-widest text-slate-800">
-                {completionCode}
-              </p>
-            </div>
-            <p className="text-xs text-slate-500 text-center mb-4">
-              Lưu mã này lại và gửi cho quản lý để xác nhận bạn đã hoàn thành bài học.
-            </p>
-            <div className="flex gap-2">
-              <button
-                onClick={async () => {
-                  try {
-                    await navigator.clipboard.writeText(completionCode);
-                    setCodeCopied(true);
-                    setTimeout(() => setCodeCopied(false), 2000);
-                  } catch {
-                    setChatError("Không thể copy — hãy copy thủ công.");
-                  }
-                }}
-                className="flex-1 border border-slate-200 text-slate-700 px-4 py-2.5 rounded-xl text-sm font-medium hover:bg-slate-50 transition-colors"
-              >
-                {codeCopied ? "Đã copy! ✓" : "Copy mã"}
-              </button>
-              <button
-                onClick={() => setShowCodeModal(false)}
-                className="flex-1 bg-slate-800 text-white px-4 py-2.5 rounded-xl text-sm font-medium hover:bg-slate-700 transition-colors"
-              >
-                Đóng
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
