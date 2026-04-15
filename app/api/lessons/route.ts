@@ -50,7 +50,7 @@ export async function PATCH(req: NextRequest) {
     const { id, title, transcript, sources, claude_md_content } = await req.json()
     if (!id) return NextResponse.json({ error: 'ID required' }, { status: 400 })
 
-    const updates: Record<string, unknown> = { updated_at: new Date().toISOString() }
+    const updates: Record<string, unknown> = {}
     if (title !== undefined) updates.title = title
     if (transcript !== undefined) updates.transcript = transcript
     if (sources !== undefined) updates.sources = sources
