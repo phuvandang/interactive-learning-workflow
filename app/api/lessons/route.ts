@@ -43,16 +43,22 @@ export async function POST(req: NextRequest) {
   }
 }
 
-// PATCH /api/lessons — update transcript, sources, claude_md_content
+// PATCH /api/lessons — update title, transcript, sources, claude_md_content
 export async function PATCH(req: NextRequest) {
   try {
     const supabase = getSupabase()
-    const { id, transcript, sources, claude_md_content } = await req.json()
+    const { id, title, transcript, sources, claude_md_content } = await req.json()
     if (!id) return NextResponse.json({ error: 'ID required' }, { status: 400 })
+
+    const updates: Record<string, unknown> = { updated_at: new Date().toISOString() }
+    if (title !== undefined) updates.title = title
+    if (transcript !== undefined) updates.transcript = transcript
+    if (sources !== undefined) updates.sources = sources
+    if (claude_md_content !== undefined) updates.claude_md_content = claude_md_content
 
     const { data, error } = await supabase
       .from('lessons')
-      .update({ transcript, sources: sources || [], claude_md_content, updated_at: new Date().toISOString() })
+      .update(updates)
       .eq('id', id)
       .select()
       .single()

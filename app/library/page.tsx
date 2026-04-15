@@ -47,6 +47,9 @@ export default function LibraryPage() {
   const [expandedSources, setExpandedSources] = useState<string | null>(null);
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameValue, setRenameValue] = useState("");
+  const [renamingLessonId, setRenamingLessonId] = useState<string | null>(null);
+  const [renamingCourseId, setRenamingCourseId] = useState<string | null>(null);
+  const [renameItemValue, setRenameItemValue] = useState("");
 
   useEffect(() => {
     async function fetchAll() {
@@ -167,6 +170,40 @@ export default function LibraryPage() {
     setDeletingId(null);
   }
 
+  function startRenamingLesson(lesson: Lesson) {
+    setRenamingLessonId(lesson.id);
+    setRenameItemValue(lesson.title);
+  }
+
+  async function handleRenameLesson(id: string) {
+    const trimmed = renameItemValue.trim();
+    if (!trimmed) return;
+    await fetch("/api/lessons", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, title: trimmed }),
+    });
+    setLessons((prev) => prev.map((l) => (l.id === id ? { ...l, title: trimmed } : l)));
+    setRenamingLessonId(null);
+  }
+
+  function startRenamingCourse(course: Course) {
+    setRenamingCourseId(course.id);
+    setRenameItemValue(course.title);
+  }
+
+  async function handleRenameCourse(id: string) {
+    const trimmed = renameItemValue.trim();
+    if (!trimmed) return;
+    await fetch("/api/courses", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, title: trimmed }),
+    });
+    setCourses((prev) => prev.map((c) => (c.id === id ? { ...c, title: trimmed } : c)));
+    setRenamingCourseId(null);
+  }
+
   function startRenaming(session: ChatSession) {
     setRenamingId(session.id);
     setRenameValue(session.lesson_title || "Bài học");
@@ -261,7 +298,31 @@ export default function LibraryPage() {
                   <div key={lesson.id} className="bg-white rounded-xl border border-slate-200 hover:border-slate-300 transition-colors">
                     <div className="p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                       <div className="flex-1 min-w-0">
-                        <h3 className="font-medium text-slate-800 truncate">{lesson.title}</h3>
+                        {renamingLessonId === lesson.id ? (
+                          <div className="flex items-center gap-2">
+                            <input
+                              autoFocus
+                              value={renameItemValue}
+                              onChange={(e) => setRenameItemValue(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") handleRenameLesson(lesson.id);
+                                if (e.key === "Escape") setRenamingLessonId(null);
+                              }}
+                              className="flex-1 text-sm font-medium border border-blue-300 rounded-md px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-400"
+                            />
+                            <button onClick={() => handleRenameLesson(lesson.id)} className="text-xs text-white bg-blue-600 hover:bg-blue-700 px-2.5 py-1 rounded-md font-medium">Lưu</button>
+                            <button onClick={() => setRenamingLessonId(null)} className="text-xs text-slate-500 hover:text-slate-700 px-2 py-1 rounded-md border border-slate-200">Hủy</button>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-1.5 group">
+                            <h3 className="font-medium text-slate-800 truncate">{lesson.title}</h3>
+                            <button
+                              onClick={() => startRenamingLesson(lesson)}
+                              className="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-slate-600 transition-opacity flex-shrink-0"
+                              title="Đổi tên"
+                            >✏️</button>
+                          </div>
+                        )}
                         <div className="flex flex-wrap items-center gap-2 sm:gap-3 mt-1">
                           <span className="text-xs text-slate-400">{formatDate(lesson.created_at)}</span>
                           <span className="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full">
@@ -309,7 +370,18 @@ export default function LibraryPage() {
                           {srcs.map((src, i) => (
                             <div key={i} className="flex items-center gap-2 text-sm">
                               <span>{sourceIcon(src.type)}</span>
-                              <span className="text-slate-700 flex-1 truncate">{src.label}</span>
+                              {src.type === "youtube" && lesson.youtube_url ? (
+                                <a
+                                  href={lesson.youtube_url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-blue-600 hover:underline flex-1 truncate"
+                                >
+                                  {src.label}
+                                </a>
+                              ) : (
+                                <span className="text-slate-700 flex-1 truncate">{src.label}</span>
+                              )}
                               <span className="text-xs text-slate-400 flex-shrink-0">{src.wordCount.toLocaleString()} từ</span>
                             </div>
                           ))}
@@ -362,7 +434,31 @@ export default function LibraryPage() {
                         <div className="flex items-center gap-2 mb-1">
                           <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-medium">📚 Khóa học</span>
                         </div>
-                        <h3 className="font-medium text-slate-800 truncate">{course.title}</h3>
+                        {renamingCourseId === course.id ? (
+                          <div className="flex items-center gap-2">
+                            <input
+                              autoFocus
+                              value={renameItemValue}
+                              onChange={(e) => setRenameItemValue(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") handleRenameCourse(course.id);
+                                if (e.key === "Escape") setRenamingCourseId(null);
+                              }}
+                              className="flex-1 text-sm font-medium border border-blue-300 rounded-md px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-400"
+                            />
+                            <button onClick={() => handleRenameCourse(course.id)} className="text-xs text-white bg-blue-600 hover:bg-blue-700 px-2.5 py-1 rounded-md font-medium">Lưu</button>
+                            <button onClick={() => setRenamingCourseId(null)} className="text-xs text-slate-500 hover:text-slate-700 px-2 py-1 rounded-md border border-slate-200">Hủy</button>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-1.5 group">
+                            <h3 className="font-medium text-slate-800 truncate">{course.title}</h3>
+                            <button
+                              onClick={() => startRenamingCourse(course)}
+                              className="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-slate-600 transition-opacity flex-shrink-0"
+                              title="Đổi tên"
+                            >✏️</button>
+                          </div>
+                        )}
                         <p className="text-xs text-slate-500 mt-0.5 truncate">
                           {course.scenario?.company} — {course.scenario?.role}
                         </p>
@@ -420,7 +516,18 @@ export default function LibraryPage() {
                           {srcs.map((src, i) => (
                             <div key={i} className="flex items-center gap-2 text-sm">
                               <span>{sourceIcon(src.type)}</span>
-                              <span className="text-slate-700 flex-1 truncate">{src.label}</span>
+                              {src.type === "youtube" && course.youtube_url ? (
+                                <a
+                                  href={course.youtube_url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-blue-600 hover:underline flex-1 truncate"
+                                >
+                                  {src.label}
+                                </a>
+                              ) : (
+                                <span className="text-slate-700 flex-1 truncate">{src.label}</span>
+                              )}
                               <span className="text-xs text-slate-400 flex-shrink-0">{src.wordCount.toLocaleString()} từ</span>
                             </div>
                           ))}

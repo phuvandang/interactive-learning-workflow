@@ -65,17 +65,23 @@ export async function POST(req: NextRequest) {
   }
 }
 
-// PATCH /api/courses — update transcript, sources, structure + replace all lessons
+// PATCH /api/courses — update title, transcript, sources, structure + replace all lessons
 export async function PATCH(req: NextRequest) {
   try {
     const supabase = getSupabase()
-    const { id, transcript, sources, structure, lessons } = await req.json()
+    const { id, title, transcript, sources, structure, lessons } = await req.json()
     if (!id) return NextResponse.json({ error: 'ID required' }, { status: 400 })
+
+    const updates: Record<string, unknown> = {}
+    if (title !== undefined) updates.title = title
+    if (transcript !== undefined) updates.transcript = transcript
+    if (sources !== undefined) updates.sources = sources
+    if (structure !== undefined) updates.structure = structure
 
     // Update course record
     const { data: course, error: courseError } = await supabase
       .from('courses')
-      .update({ transcript, sources: sources || [], structure })
+      .update(updates)
       .eq('id', id)
       .select()
       .single()
