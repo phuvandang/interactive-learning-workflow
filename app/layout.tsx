@@ -35,6 +35,9 @@ export default function RootLayout({
               <Link href="/library" className="text-sm text-slate-600 hover:text-blue-600 transition-colors">
                 Thư viện bài học
               </Link>
+              <Link href="/scripts" className="text-sm text-slate-600 hover:text-blue-600 transition-colors">
+                YouTube Script
+              </Link>
               <span className="text-xs text-slate-400">by <span className="font-semibold text-slate-600">NEO</span></span>
             </div>
           </div>
